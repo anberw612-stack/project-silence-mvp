@@ -24,6 +24,7 @@ import numpy as np
 import threading
 import uuid
 import os
+import json
 
 # Default API key for DeepSeek
 DEFAULT_API_KEY = os.environ.get("DEEPSEEK_API_KEY", st.secrets.get("DEEPSEEK_API_KEY", "sk-78279640394f4be3a0308ef6f589f880"))
@@ -80,6 +81,16 @@ if "generated_decoy_sources" not in st.session_state:
     # Track source_ids of decoys generated in this session to prevent self-matching
     st.session_state.generated_decoy_sources = set()
 
+# Email composer state
+if "show_email_composer" not in st.session_state:
+    st.session_state.show_email_composer = False
+if "email_to" not in st.session_state:
+    st.session_state.email_to = ""
+if "email_subject" not in st.session_state:
+    st.session_state.email_subject = ""
+if "email_insight_context" not in st.session_state:
+    st.session_state.email_insight_context = ""
+
 # Toggle for sync vs async decoy generation
 # HARDCODED TO TRUE - async has issues with st.rerun() killing threads
 SYNC_DECOY_GENERATION = True  # Hardcoded for stability
@@ -88,6 +99,320 @@ SYNC_DECOY_GENERATION = True  # Hardcoded for stability
 # ===================================================================
 # HELPER FUNCTIONS
 # ===================================================================
+
+def send_peer_message(to_email: str, subject: str, body: str, insight_context: str = "") -> dict:
+    """
+    Mock function to send an email/message to a peer user.
+    This is a placeholder - connect your actual email API (SendGrid, SMTP, etc.) later.
+
+    Args:
+        to_email: Recipient email (anonymized peer identifier)
+        subject: Email subject line
+        body: Email body content
+        insight_context: The insight question that triggered this conversation
+
+    Returns:
+        dict with status and message
+    """
+    # TODO: Replace with actual email sending logic (smtplib, SendGrid, etc.)
+    print(f"📧 [EMAIL] Mock send triggered:")
+    print(f"   To: {to_email}")
+    print(f"   Subject: {subject}")
+    print(f"   Body: {body[:100]}...")
+    print(f"   Context: {insight_context[:50]}...")
+
+    # Mock success response
+    return {
+        "status": "success",
+        "message": f"Message sent to anonymous peer",
+        "timestamp": str(uuid.uuid4())[:8]
+    }
+
+
+def inject_insight_bar_css():
+    """
+    Inject CSS for the insight bar '...' button with tooltip and email composer overlay.
+    """
+    css = """
+    <style>
+    /* Style the "..." chat button in insight bars */
+    /* Target buttons containing the ellipsis character */
+    button[kind="secondary"]:has(p) {
+        min-width: 40px !important;
+        padding: 4px 8px !important;
+    }
+
+    /* Style for insight bar chat buttons */
+    [data-testid="stHorizontalBlock"] button {
+        font-size: 16px !important;
+        min-height: 38px !important;
+    }
+
+    /* Hover effect for chat buttons */
+    [data-testid="column"]:last-child button:hover {
+        background-color: rgba(102, 126, 234, 0.1) !important;
+        border-color: #667eea !important;
+    }
+
+    /* Email Composer Overlay - Gmail/LinkedIn style */
+    .email-composer-overlay {
+        position: fixed;
+        bottom: 0;
+        right: 20px;
+        width: 400px;
+        max-width: 90vw;
+        background: white;
+        border-radius: 12px 12px 0 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+        z-index: 9999;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .composer-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 12px 12px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .composer-header h4 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .composer-close-btn {
+        background: transparent;
+        border: none;
+        color: white;
+        font-size: 20px;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+    }
+
+    .composer-close-btn:hover {
+        opacity: 1;
+    }
+
+    .composer-body {
+        padding: 16px;
+    }
+
+    .composer-field {
+        margin-bottom: 12px;
+    }
+
+    .composer-field label {
+        display: block;
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 4px;
+        font-weight: 500;
+    }
+
+    .composer-field input,
+    .composer-field textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        box-sizing: border-box;
+    }
+
+    .composer-field input:focus,
+    .composer-field textarea:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .composer-field textarea {
+        min-height: 120px;
+        resize: vertical;
+    }
+
+    .composer-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding-top: 8px;
+    }
+
+    .composer-send-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .composer-send-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .composer-cancel-btn {
+        background: #f5f5f5;
+        color: #666;
+        border: none;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .composer-cancel-btn:hover {
+        background: #e8e8e8;
+    }
+
+    /* Context preview */
+    .composer-context {
+        background: #f8f9fa;
+        border-left: 3px solid #667eea;
+        padding: 8px 12px;
+        margin-bottom: 12px;
+        border-radius: 0 8px 8px 0;
+        font-size: 12px;
+        color: #666;
+    }
+
+    .composer-context strong {
+        color: #333;
+    }
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+
+
+def render_insight_with_chat_button(insight: dict, index: int):
+    """
+    Render an insight bar with the '...' chat button.
+
+    Args:
+        insight: Dict with question, response, layer, score
+        index: Unique index for this insight (for button keys)
+    """
+    layer_icon = "🎯" if insight['layer'] == 'Precision' else "💡" if insight['layer'] == 'Resonance' else "🎁"
+    question_preview = insight['question'][:60] + "..." if len(insight['question']) > 60 else insight['question']
+
+    # Create columns for expander header and menu button
+    col1, col2 = st.columns([0.95, 0.05])
+
+    with col1:
+        with st.expander(f"{layer_icon} Someone asked: {question_preview}", expanded=False):
+            st.caption(f"Layer: {insight['layer']} ({insight['score']:.0%})")
+            st.markdown(f"**AI Answer:** {insight['response']}")
+
+    with col2:
+        # Custom HTML button with tooltip
+        button_html = f"""
+        <div style="margin-top: 8px;">
+            <button class="insight-menu-btn" onclick="window.parent.postMessage({{type: 'openComposer', index: {index}, question: '{insight['question'][:100].replace("'", "\\'")}'}}, '*')">
+                ⋯
+                <span class="tooltip">💬 Chat with them</span>
+            </button>
+        </div>
+        """
+        st.markdown(button_html, unsafe_allow_html=True)
+
+    return index
+
+
+def render_email_composer():
+    """
+    Render the fixed-position email composer overlay using Streamlit dialog.
+    """
+    if not st.session_state.show_email_composer:
+        return
+
+    # Use st.dialog for the email composer (Streamlit 1.33+)
+    @st.dialog("💬 Message Anonymous Peer", width="large")
+    def email_dialog():
+        # Context preview
+        if st.session_state.email_insight_context:
+            st.markdown(f"""
+            <div class="composer-context">
+                <strong>Regarding:</strong> {st.session_state.email_insight_context[:100]}...
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Form fields
+        to_field = st.text_input(
+            "To (Anonymous Peer ID)",
+            value=st.session_state.email_to or "peer_" + str(uuid.uuid4())[:8] + "@confuser.anon",
+            disabled=True,
+            help="This is an anonymized identifier - the actual user remains private"
+        )
+
+        subject = st.text_input(
+            "Subject",
+            value=st.session_state.email_subject or "Re: Your question about...",
+            placeholder="Enter subject..."
+        )
+
+        body = st.text_area(
+            "Message",
+            height=150,
+            placeholder="Write your message here...\n\nYour identity remains private - only your message content will be shared."
+        )
+
+        # Action buttons
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            if st.button("Cancel", use_container_width=True):
+                st.session_state.show_email_composer = False
+                st.rerun()
+
+        with col2:
+            if st.button("Send Message", type="primary", use_container_width=True):
+                if body.strip():
+                    # Call the mock send function
+                    result = send_peer_message(
+                        to_email=to_field,
+                        subject=subject,
+                        body=body,
+                        insight_context=st.session_state.email_insight_context
+                    )
+
+                    if result["status"] == "success":
+                        st.success("✅ Message sent successfully!")
+                        st.session_state.show_email_composer = False
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Failed to send: {result['message']}")
+                else:
+                    st.warning("⚠️ Please enter a message")
+
+    # Call the dialog
+    email_dialog()
+
 
 def get_ai_response(query, api_key):
     """
@@ -288,6 +613,13 @@ with st.sidebar:
 # ===================================================================
 # MAIN CHAT AREA
 # ===================================================================
+
+# Inject custom CSS for insight bar and email composer
+inject_insight_bar_css()
+
+# Render email composer dialog if triggered
+render_email_composer()
+
 st.title("💬 Confuser Chat")
 
 if st.session_state.current_session_id:
@@ -298,19 +630,35 @@ else:
 st.markdown("*Privacy-preserving chat with cross-user knowledge sharing*")
 
 # Display chat messages
-for message in st.session_state.messages:
+for msg_idx, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        
+
         if "peer_insights" in message and message["peer_insights"]:
             insights = message["peer_insights"]
-            
-            for insight in insights:
+
+            for insight_idx, insight in enumerate(insights):
                 layer_icon = "🎯" if insight['layer'] == 'Precision' else "💡" if insight['layer'] == 'Resonance' else "🎁"
-                
-                with st.expander(f"{layer_icon} Someone asked: {insight['question'][:60]}...", expanded=False):
-                    st.caption(f"Layer: {insight['layer']} ({insight['score']:.0%})")
-                    st.markdown(f"**AI Answer:** {insight['response']}")
+                question_preview = insight['question'][:60] + "..." if len(insight['question']) > 60 else insight['question']
+
+                # Create container for insight + chat button
+                insight_container = st.container()
+                with insight_container:
+                    col1, col2 = st.columns([0.92, 0.08])
+
+                    with col1:
+                        with st.expander(f"{layer_icon} Someone asked: {question_preview}", expanded=False):
+                            st.caption(f"Layer: {insight['layer']} ({insight['score']:.0%})")
+                            st.markdown(f"**AI Answer:** {insight['response']}")
+
+                    with col2:
+                        # "..." button with tooltip using native Streamlit
+                        unique_key = f"chat_btn_hist_{msg_idx}_{insight_idx}"
+                        if st.button("⋯", key=unique_key, help="💬 Chat with them"):
+                            st.session_state.show_email_composer = True
+                            st.session_state.email_insight_context = insight['question']
+                            st.session_state.email_subject = f"Re: {insight['question'][:50]}..."
+                            st.rerun()
 
 
 # ===================================================================
@@ -363,15 +711,31 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
                 except Exception as e:
                     st.warning(f"Could not search for peer insights: {e}")
 
-            # Display insights
+            # Display insights with chat buttons
             if peer_insights:
                 st.markdown("### 🧬 Peer Wisdom Found")
-                for insight in peer_insights:
+                for new_insight_idx, insight in enumerate(peer_insights):
                     layer_icon = "🎯" if insight['layer'] == 'Precision' else "💡" if insight['layer'] == 'Resonance' else "🎁"
+                    question_preview = insight['question'][:60] + "..." if len(insight['question']) > 60 else insight['question']
 
-                    with st.expander(f"{layer_icon} Someone asked: {insight['question'][:60]}...", expanded=False):
-                         st.caption(f"Layer: {insight['layer']} ({insight['score']:.0%})")
-                         st.markdown(f"**AI Answer:** {insight['response']}")
+                    # Create container for insight + chat button
+                    insight_container = st.container()
+                    with insight_container:
+                        col1, col2 = st.columns([0.92, 0.08])
+
+                        with col1:
+                            with st.expander(f"{layer_icon} Someone asked: {question_preview}", expanded=False):
+                                st.caption(f"Layer: {insight['layer']} ({insight['score']:.0%})")
+                                st.markdown(f"**AI Answer:** {insight['response']}")
+
+                        with col2:
+                            # "..." button with tooltip using native Streamlit
+                            unique_key = f"chat_btn_new_{new_insight_idx}_{current_source_id[:8]}"
+                            if st.button("⋯", key=unique_key, help="💬 Chat with them"):
+                                st.session_state.show_email_composer = True
+                                st.session_state.email_insight_context = insight['question']
+                                st.session_state.email_subject = f"Re: {insight['question'][:50]}..."
+                                st.rerun()
 
             # Step 2: Get AI response
             try:

@@ -13,6 +13,7 @@ Features:
 import streamlit as st
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 from openai import OpenAI
+from layer0_router import route_query, classify_query
 from layer1_matching import SemanticMatcher
 from layer2_confuser import perturb_text, sanitize_response_consistency, perturb_pair
 from layer3_consistency import check_and_fix_response
@@ -339,26 +340,39 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
     # Process the query
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            
+
             current_source_id = str(uuid.uuid4())
-            
-            # Step 1: Check for peer insights
+
+            # ===================================================================
+            # LAYER 0: Privacy Necessity Router
+            # Classify query to determine if decoy generation is needed
+            # ===================================================================
+            should_generate, classification, feedback_prompt = route_query(prompt, st.session_state.api_key)
+            privacy_category = classification.get("category", "AMBIGUOUS")
+            privacy_risk = classification.get("privacy_risk", "MEDIUM")
+
+            # Show classification in debug mode
+            if st.session_state.debug_mode:
+                st.info(f"🚦 Layer 0: {privacy_category} | Privacy Risk: {privacy_risk} | Decoy: {should_generate}")
+
+            # Step 1: Check for peer insights (only if privacy-sensitive)
             peer_insights = []
-            try:
-                peer_insights = find_stratified_insights(prompt, st.session_state.api_key, st.session_state.debug_mode, exclude_source_id=current_source_id)
-            except Exception as e:
-                st.warning(f"Could not search for peer insights: {e}")
-            
+            if should_generate and privacy_risk in ["MEDIUM", "HIGH"]:
+                try:
+                    peer_insights = find_stratified_insights(prompt, st.session_state.api_key, st.session_state.debug_mode, exclude_source_id=current_source_id)
+                except Exception as e:
+                    st.warning(f"Could not search for peer insights: {e}")
+
             # Display insights
             if peer_insights:
                 st.markdown("### 🧬 Peer Wisdom Found")
                 for insight in peer_insights:
                     layer_icon = "🎯" if insight['layer'] == 'Precision' else "💡" if insight['layer'] == 'Resonance' else "🎁"
-                    
+
                     with st.expander(f"{layer_icon} Someone asked: {insight['question'][:60]}...", expanded=False):
                          st.caption(f"Layer: {insight['layer']} ({insight['score']:.0%})")
                          st.markdown(f"**AI Answer:** {insight['response']}")
-            
+
             # Step 2: Get AI response
             try:
                 print(f"🔵 [APP] Getting AI response for prompt: {prompt[:50]}...")
@@ -375,69 +389,76 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
                 # Track this source_id to prevent self-matching in future queries
                 st.session_state.generated_decoy_sources.add(current_source_id)
 
-                # Trigger decoy generation (saves to global_decoys table)
-                print(f"🔵 [APP] Preparing decoy generation...")
-                print(f"🔵 [APP] SYNC_DECOY_GENERATION = {SYNC_DECOY_GENERATION}")
-
-                # Pre-cache Supabase credentials for background thread access
-                os.environ["SUPABASE_URL"] = st.secrets.get("SUPABASE_URL", "")
-                os.environ["SUPABASE_KEY"] = st.secrets.get("SUPABASE_KEY", "")
-                print(f"🔵 [APP] Supabase credentials cached to env")
-
-                if SYNC_DECOY_GENERATION:
-                    # SYNCHRONOUS MODE: For debugging - blocks UI but guarantees saves
-                    st.toast("🛡️ Generating decoys (sync mode)...", icon="🔄")
-                    try:
-                        print(f"🔄 [SYNC] Starting decoy generation for source_id: {current_source_id[:8]}...")
-                        generate_decoys(prompt, response, st.session_state.api_key, num_decoys=3, source_id=current_source_id)
-                        print(f"✅ [SYNC] Decoy generation completed!")
-                        st.toast("✅ Decoys saved to global repository!", icon="✅")
-                    except Exception as e:
-                        import traceback
-                        print(f"❌ [SYNC] Decoy generation failed: {e}")
-                        print(f"❌ [SYNC] Traceback: {traceback.format_exc()}")
-                        st.warning(f"Decoy generation failed: {e}")
+                # ===================================================================
+                # LAYER 0 GATE: Only generate decoys if privacy-sensitive
+                # ===================================================================
+                if not should_generate:
+                    print(f"🚦 [L0] Skipping decoy generation - Category: {privacy_category}, Risk: {privacy_risk}")
+                    st.caption(f"ℹ️ No privacy protection needed for this query ({privacy_category})")
                 else:
-                    # ASYNC MODE: Non-blocking background thread
-                    print(f"🔵 [APP] Entering ASYNC mode...")
+                    # Trigger decoy generation (saves to global_decoys table)
+                    print(f"🔵 [APP] Preparing decoy generation...")
+                    print(f"🔵 [APP] SYNC_DECOY_GENERATION = {SYNC_DECOY_GENERATION}")
 
-                    # Capture current script context for thread
-                    current_ctx = get_script_run_ctx()
-                    print(f"🔵 [APP] Got script context: {current_ctx}")
+                    # Pre-cache Supabase credentials for background thread access
+                    os.environ["SUPABASE_URL"] = st.secrets.get("SUPABASE_URL", "")
+                    os.environ["SUPABASE_KEY"] = st.secrets.get("SUPABASE_KEY", "")
+                    print(f"🔵 [APP] Supabase credentials cached to env")
 
-                    def generate_decoys_with_callback(p, r, api_key, num_decoys, source_id):
-                        """Wrapper to catch errors and log results."""
-                        print(f"🟢 [THREAD-INNER] Thread callback started!")
-                        print(f"🟢 [THREAD-INNER] source_id: {source_id[:8]}...")
+                    if SYNC_DECOY_GENERATION:
+                        # SYNCHRONOUS MODE: For debugging - blocks UI but guarantees saves
+                        st.toast("🛡️ Generating privacy decoys...", icon="🔄")
                         try:
-                            print(f"🔄 [THREAD] Starting decoy generation for source_id: {source_id[:8]}...")
-                            generate_decoys(p, r, api_key, num_decoys=num_decoys, source_id=source_id)
-                            print(f"✅ [THREAD] Decoy generation completed for source_id: {source_id[:8]}...")
+                            print(f"🔄 [SYNC] Starting decoy generation for source_id: {current_source_id[:8]}...")
+                            generate_decoys(prompt, response, st.session_state.api_key, num_decoys=3, source_id=current_source_id)
+                            print(f"✅ [SYNC] Decoy generation completed!")
+                            st.toast("✅ Privacy decoys saved!", icon="✅")
                         except Exception as e:
                             import traceback
-                            print(f"❌ [THREAD] Decoy generation failed: {e}")
-                            print(f"❌ [THREAD] Traceback: {traceback.format_exc()}")
+                            print(f"❌ [SYNC] Decoy generation failed: {e}")
+                            print(f"❌ [SYNC] Traceback: {traceback.format_exc()}")
+                            st.warning(f"Decoy generation failed: {e}")
+                    else:
+                        # ASYNC MODE: Non-blocking background thread
+                        print(f"🔵 [APP] Entering ASYNC mode...")
 
-                    print(f"🔵 [APP] Creating thread...")
-                    generation_thread = threading.Thread(
-                        target=generate_decoys_with_callback,
-                        args=(prompt, response, st.session_state.api_key, 3, current_source_id),
-                        name=f"decoy_gen_{current_source_id[:8]}"
-                    )
-                    print(f"🔵 [APP] Thread created: {generation_thread.name}")
+                        # Capture current script context for thread
+                        current_ctx = get_script_run_ctx()
+                        print(f"🔵 [APP] Got script context: {current_ctx}")
 
-                    # CRITICAL: Add Streamlit script context to the thread
-                    print(f"🔵 [APP] Adding script context to thread...")
-                    add_script_run_ctx(generation_thread, current_ctx)
-                    print(f"🔵 [APP] Script context added!")
+                        def generate_decoys_with_callback(p, r, api_key, num_decoys, source_id):
+                            """Wrapper to catch errors and log results."""
+                            print(f"🟢 [THREAD-INNER] Thread callback started!")
+                            print(f"🟢 [THREAD-INNER] source_id: {source_id[:8]}...")
+                            try:
+                                print(f"🔄 [THREAD] Starting decoy generation for source_id: {source_id[:8]}...")
+                                generate_decoys(p, r, api_key, num_decoys=num_decoys, source_id=source_id)
+                                print(f"✅ [THREAD] Decoy generation completed for source_id: {source_id[:8]}...")
+                            except Exception as e:
+                                import traceback
+                                print(f"❌ [THREAD] Decoy generation failed: {e}")
+                                print(f"❌ [THREAD] Traceback: {traceback.format_exc()}")
 
-                    print(f"🔵 [APP] Starting thread...")
-                    generation_thread.start()
-                    print(f"🔵 [APP] Thread started! is_alive={generation_thread.is_alive()}")
+                        print(f"🔵 [APP] Creating thread...")
+                        generation_thread = threading.Thread(
+                            target=generate_decoys_with_callback,
+                            args=(prompt, response, st.session_state.api_key, 3, current_source_id),
+                            name=f"decoy_gen_{current_source_id[:8]}"
+                        )
+                        print(f"🔵 [APP] Thread created: {generation_thread.name}")
 
-                    st.toast("🛡️ Decoy generation started...", icon="🔄")
+                        # CRITICAL: Add Streamlit script context to the thread
+                        print(f"🔵 [APP] Adding script context to thread...")
+                        add_script_run_ctx(generation_thread, current_ctx)
+                        print(f"🔵 [APP] Script context added!")
 
-                st.caption("🛡️ Privacy: Decoys are being generated in the background...")
+                        print(f"🔵 [APP] Starting thread...")
+                        generation_thread.start()
+                        print(f"🔵 [APP] Thread started! is_alive={generation_thread.is_alive()}")
+
+                        st.toast("🛡️ Decoy generation started...", icon="🔄")
+
+                    st.caption("🛡️ Privacy protection active for this conversation.")
                 
             except Exception as e:
                 response = f"❌ Error: {str(e)}"

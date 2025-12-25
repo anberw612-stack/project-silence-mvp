@@ -20,34 +20,56 @@ from layer3_consistency import check_and_fix_response
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# System prompt for generating decoys - Mandatory Swaps
-DECOY_SYSTEM_PROMPT = """You are the 'Confuser' Privacy Module.
-Task: Generate a 'Synthetic Decoy' that is semantically related but factually DISTINCT from the Original Query.
+# System prompt for generating decoys - Deep Structural Obfuscation
+DECOY_SYSTEM_PROMPT = """You are the 'Confuser' Privacy Module - an expert in deep semantic obfuscation.
+Task: Generate a 'Synthetic Decoy' that preserves the CORE INTENT but is UNRECOGNIZABLE to the original author.
 
-PROTOCOL - EXECUTE THESE 4 MANDATORY SWAPS:
+GOAL: If the original author sees the decoy, they should NOT recognize it as derived from their query.
 
-1. **DOMAIN HARD SWAP** (The most important check):
-   - You MUST change the specific technical tool, language, or medical condition.
-   - *Example*: If Original is "Python", Decoy MUST be "Java" or "Go".
-   - *Example*: If Original is "Flu", Decoy MUST be "Gastritis".
-   - *Failure to swap this results in High Similarity (Failure).*
+PROTOCOL - EXECUTE ALL 6 MANDATORY TRANSFORMATIONS:
 
-2. **GEOGRAPHIC & ENTITY SWAP**:
-   - Change Cities ("Seattle" -> "Austin").
-   - Change Org Types ("Startup" -> "Enterprise").
+1. **DOMAIN HARD SWAP** (Critical):
+   - Change the specific field/tool/condition to a PARALLEL but DIFFERENT domain.
+   - Example: "临床医学+科研" → "药学+药物研发" (both medical, but different paths)
+   - Example: "Python debugging" → "Go performance tuning" (both programming, different focus)
+
+2. **ENTITY & METRIC SWAP**:
+   - Change test types: "英语六级" → "雅思/托福/GRE"
+   - Change institutions: "北京大学" → "复旦大学" or "某985高校"
+   - Change metrics to equivalent but different scales: "412分" → "5.5分" (different test systems)
 
 3. **NUMERIC SHIFT**:
-   - Change Ages (+/- 3y), Versions (v2->v3), Durations.
+   - Ages: +/- 2-5 years
+   - Scores: Change to equivalent level in different system
+   - Durations: "3年" → "2年半" or "几年"
 
-4. **SYNTACTIC RESTRUCTURING (Style Shift)**:
-   - Change the Sentence Structure. (e.g., Active -> Passive).
-   - Change the Speaking Tone. (e.g., Panic -> Analytic).
+4. **SEQUENCE RESTRUCTURING** (Critical for unrecognizability):
+   - REORDER the information elements in the sentence.
+   - Example: [Major] → [Goal] → [Weakness] becomes [Goal] → [Weakness] → [Major]
+   - Example: "我是X专业，想做Y，但Z很差" → "想从事Y方向，虽然Z是短板，目前在学X"
+
+5. **TONE & PERSPECTIVE SHIFT**:
+   - Change emotional tone: Anxious → Analytical, Humble → Confident
+   - Change perspective: First person → Third person description
+   - Change question style: Direct → Rhetorical, Seeking advice → Seeking validation
+   - Example: "我适合读博吗？" → "这种情况申请博士现实吗？"
+
+6. **SYNTACTIC VARIATION**:
+   - Change sentence connectors: "但是" → "不过/然而/虽然...但"
+   - Split or merge clauses
+   - Add or remove hedging language
+
+QUALITY CHECK - The decoy should:
+✅ Preserve the abstract problem structure (someone asking about academic/career fit)
+✅ Be unrecognizable to the original author
+✅ Sound like a DIFFERENT person with a SIMILAR dilemma
+❌ NOT be a simple find-and-replace of entities
 
 OUTPUT FORMAT (JSON ONLY):
 {
-  "rationale": "Swapped Python for Go; Changed Seattle to Austin.",
-  "query": "The rewritten query",
-  "response": "The rewritten response"
+  "rationale": "1) Domain: 临床医学→药学; 2) Metric: 六级→雅思; 3) Sequence: reversed major/goal order; 4) Tone: anxious→reflective",
+  "query": "The deeply transformed query",
+  "response": "The correspondingly transformed response"
 }
 """
 
@@ -194,7 +216,20 @@ def generate_decoys(original_query, original_response, api_key, num_decoys=3, ba
 [MISSION OBJECTIVE]
 Target Similarity: 0.75 to 0.85 (The "Goldilocks Zone").
 Current Status: You are generating a decoy.
-GOAL: You MUST change the specific Nouns/Entities (Cities, Tools, Ages) to lower similarity, but keep the Logic to maintain coherence.
+
+CRITICAL REQUIREMENTS:
+1. The original author must NOT recognize the decoy as derived from their query
+2. Apply ALL 6 transformations, especially SEQUENCE RESTRUCTURING
+3. Change the ORDER of information elements, not just the entities
+4. Shift the tone and perspective to sound like a DIFFERENT person
+
+ANTI-PATTERN (DO NOT DO THIS):
+❌ "我是临床医学专业，GPA 2.9，想读博" → "我是口腔医学专业，GPA 3.0，想读博"
+   (This is just entity replacement - too recognizable!)
+
+CORRECT PATTERN:
+✅ "我是临床医学专业，GPA 2.9，想读博" → "考虑读博深造，但绩点只有3.1左右，药学方向的研究生不知道有没有机会"
+   (Reordered structure, changed perspective, different domain)
 """
 
         user_content = f"""{mission_context}
@@ -293,9 +328,11 @@ Original Response: {original_response}"""
                 print(f"   ❌ Batch {batch_count} produced no valid candidates")
                 continue
 
-            # Pick the 'least bad' candidate (Highest Similarity)
-            best_candidate = sorted(batch_candidates, key=lambda x: x['sim'], reverse=True)[0]
-            print(f"   ⚖️ Judge Reviewing Best Candidate (Sim: {best_candidate['sim']:.3f})...")
+            # Pick the candidate CLOSEST to the Goldilocks Zone (0.75-0.85)
+            # Target midpoint is 0.80 - find candidate with smallest distance to this target
+            GOLDILOCKS_TARGET = 0.80
+            best_candidate = min(batch_candidates, key=lambda x: abs(x['sim'] - GOLDILOCKS_TARGET))
+            print(f"   ⚖️ Judge Reviewing Best Candidate (Sim: {best_candidate['sim']:.3f}, Distance from 0.80: {abs(best_candidate['sim'] - GOLDILOCKS_TARGET):.3f})...")
 
             # Call The Judge
             verdict = call_judge(original_query, best_candidate['decoy']['query'], api_key, base_url)

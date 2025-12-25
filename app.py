@@ -49,6 +49,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# DEBUG: Print at app start to confirm code version
+print("=" * 60)
+print("🚀 APP STARTED - CODE VERSION: 2025-12-25-v3-SYNC-MODE")
+print(f"🚀 SYNC_DECOY_GENERATION will be: {os.environ.get('SYNC_DECOY_GENERATION', 'true')}")
+print("=" * 60)
+
 
 # ===================================================================
 # SESSION STATE INITIALIZATION

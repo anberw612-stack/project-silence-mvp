@@ -21,16 +21,34 @@ import json
 def get_supabase_client() -> Client:
     """
     Get or create a Supabase client using Streamlit secrets.
-    
+    Thread-safe: Creates a new client if called from a background thread.
+
     Returns:
         Client: Supabase client instance
     """
-    if "supabase_client" not in st.session_state:
-        url = st.secrets["SUPABASE_URL"]
-        key = st.secrets["SUPABASE_KEY"]
-        st.session_state.supabase_client = create_client(url, key)
-    
-    return st.session_state.supabase_client
+    import threading
+    import os
+
+    # Check if we're in the main Streamlit thread
+    is_main_thread = threading.current_thread() is threading.main_thread()
+
+    if is_main_thread:
+        # Main thread: use session state for caching
+        if "supabase_client" not in st.session_state:
+            url = st.secrets["SUPABASE_URL"]
+            key = st.secrets["SUPABASE_KEY"]
+            st.session_state.supabase_client = create_client(url, key)
+        return st.session_state.supabase_client
+    else:
+        # Background thread: create a new client using environment variables or cached secrets
+        # Try environment variables first (for background threads)
+        url = os.environ.get("SUPABASE_URL") or st.secrets.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_KEY") or st.secrets.get("SUPABASE_KEY")
+
+        if not url or not key:
+            raise RuntimeError("Supabase credentials not available in background thread")
+
+        return create_client(url, key)
 
 
 def get_current_user_id() -> str:
@@ -322,74 +340,88 @@ def delete_session(session_id: str):
 
 
 # ===================================================================
-# CONVERSATION/DECOY FUNCTIONS (For Peer Insights)
+# GLOBAL DECOYS FUNCTIONS (Anonymous Public Repository)
 # ===================================================================
 
-def save_conversation(query: str, response: str, is_decoy: bool = False, parent_id: str = None, source_id: str = None) -> str:
+def save_global_decoy(query: str, response: str, topics: list = None, source_id: str = None) -> str:
     """
-    Save a conversation (decoy) to the database.
-    
+    Save a decoy to the global_decoys table (anonymous, shared across all users).
+
     Args:
-        query (str): The conversation query
-        response (str): The AI's response
-        is_decoy (bool): Whether this is a generated decoy
-        parent_id (str): ID of the original conversation (if decoy)
-        source_id (str): Batch ID to group sibling decoys
-        
+        query (str): The obfuscated decoy query
+        response (str): The obfuscated AI response
+        topics (list): Optional list of topic keywords for categorization
+        source_id (str): Batch ID to group sibling decoys (for deduplication)
+
     Returns:
         str: The ID of the inserted row, or None on failure
     """
     try:
+        print(f"🔄 [DB] Attempting to save global decoy (source_id: {source_id[:8] if source_id else 'None'}...)")
+        print(f"🔄 [DB] Query preview: {query[:50]}...")
+
         supabase = get_supabase_client()
-        
-        conv_data = {
-            'id': str(uuid.uuid4()),
-            'original_query': query,
-            'ai_response': response,
-            'is_decoy': is_decoy,
-            'parent_id': parent_id,
+        print(f"✅ [DB] Supabase client obtained successfully")
+
+        decoy_id = str(uuid.uuid4())
+        decoy_data = {
+            'id': decoy_id,
+            'query': query,
+            'response': response,
+            'topics': topics if topics else [],
             'source_id': source_id,
-            'timestamp': datetime.now().isoformat()
+            'created_at': datetime.now().isoformat()
         }
-        
-        response_obj = supabase.table('conversations').insert(conv_data).execute()
-        
-        return response_obj.data[0]['id'] if response_obj.data else None
-        
+
+        print(f"🔄 [DB] Inserting into global_decoys table...")
+        response_obj = supabase.table('global_decoys').insert(decoy_data).execute()
+
+        if response_obj.data:
+            print(f"✅ [DB] SUCCESS! Decoy saved to global_decoys with id: {decoy_id[:8]}...")
+            return response_obj.data[0]['id']
+        else:
+            print(f"⚠️ [DB] Insert returned no data. Response: {response_obj}")
+            return None
+
     except Exception as e:
-        print(f"❌ Error saving conversation: {e}")
+        import traceback
+        print(f"❌ [DB] Error saving global decoy: {e}")
+        print(f"❌ [DB] Traceback: {traceback.format_exc()}")
         return None
 
 
-def get_all_queries() -> list:
+def get_all_global_decoys(limit: int = 500) -> list:
     """
-    Retrieve queries from the database for Semantic Matching (Layer 1).
+    Retrieve all decoys from the global repository for Semantic Matching (Layer 1).
     
-    PRIVACY: This fetches ONLY DECOYS.
+    This is the PUBLIC decoy pool - anonymous and shared across all users.
+    
+    Args:
+        limit (int): Maximum number of decoys to return
     
     Returns:
-        list: List of tuples (id, query_text, timestamp, source_id)
+        list: List of tuples (id, query_text, created_at, source_id)
     """
     try:
         supabase = get_supabase_client()
         
-        response = supabase.table('conversations') \
-            .select('id, original_query, timestamp, source_id') \
-            .eq('is_decoy', True) \
-            .order('timestamp', desc=True) \
+        response = supabase.table('global_decoys') \
+            .select('id, query, created_at, source_id') \
+            .order('created_at', desc=True) \
+            .limit(limit) \
             .execute()
         
-        # Convert to list of tuples for compatibility
-        return [(c['id'], c['original_query'], c['timestamp'], c['source_id']) for c in response.data] if response.data else []
+        # Convert to list of tuples for compatibility with existing code
+        return [(d['id'], d['query'], d['created_at'], d['source_id']) for d in response.data] if response.data else []
         
     except Exception as e:
-        print(f"❌ Error retrieving queries: {e}")
+        print(f"❌ Error retrieving global decoys: {e}")
         return []
 
 
-def get_response_by_query(query_text: str) -> str:
+def get_global_decoy_response(query_text: str) -> str:
     """
-    Retrieve the AI response for a specific query.
+    Retrieve the AI response for a specific decoy query from global_decoys.
     
     Args:
         query_text (str): The query to search for
@@ -400,56 +432,91 @@ def get_response_by_query(query_text: str) -> str:
     try:
         supabase = get_supabase_client()
         
-        response = supabase.table('conversations') \
-            .select('ai_response') \
-            .eq('original_query', query_text) \
+        response = supabase.table('global_decoys') \
+            .select('response') \
+            .eq('query', query_text) \
             .limit(1) \
             .execute()
         
-        return response.data[0]['ai_response'] if response.data else None
+        return response.data[0]['response'] if response.data else None
         
     except Exception as e:
-        print(f"❌ Error retrieving response: {e}")
+        print(f"❌ Error retrieving global decoy response: {e}")
         return None
 
 
-def get_conversation_count() -> int:
+def get_global_decoy_count() -> int:
     """
-    Get the total number of conversations (decoys).
+    Get the total number of global decoys.
     
     Returns:
-        int: Count of conversations
+        int: Count of global decoys
     """
     try:
         supabase = get_supabase_client()
         
-        response = supabase.table('conversations') \
+        response = supabase.table('global_decoys') \
             .select('id', count='exact') \
             .execute()
         
         return response.count if response.count else 0
         
     except Exception as e:
-        print(f"❌ Error counting conversations: {e}")
+        print(f"❌ Error counting global decoys: {e}")
         return 0
+
+
+# ===================================================================
+# LEGACY FUNCTIONS (For backwards compatibility - redirect to global_decoys)
+# ===================================================================
+
+def save_conversation(query: str, response: str, is_decoy: bool = False, parent_id: str = None, source_id: str = None) -> str:
+    """
+    LEGACY: Save a conversation. Now redirects to global_decoys for decoys.
+    """
+    if is_decoy:
+        return save_global_decoy(query, response, topics=None, source_id=source_id)
+    # Non-decoys are no longer saved (Ghost Protocol)
+    return None
+
+
+def get_all_queries() -> list:
+    """
+    LEGACY: Retrieve queries for Layer 1. Now uses global_decoys.
+    """
+    return get_all_global_decoys()
+
+
+def get_response_by_query(query_text: str) -> str:
+    """
+    LEGACY: Get response by query. Now uses global_decoys.
+    """
+    return get_global_decoy_response(query_text)
+
+
+def get_conversation_count() -> int:
+    """
+    LEGACY: Get conversation count. Now counts global_decoys.
+    """
+    return get_global_decoy_count()
 
 
 def clear_all_conversations():
     """
-    Clear all conversations from the database.
+    Clear all global decoys from the database.
     
     WARNING: This deletes all decoy data permanently!
     """
     try:
         supabase = get_supabase_client()
         
-        # Delete all conversations
-        supabase.table('conversations').delete().neq('id', '').execute()
+        # Delete all global decoys
+        supabase.table('global_decoys').delete().neq('id', '').execute()
         
-        print("✅ All conversations cleared")
+        print("✅ All global decoys cleared")
         
     except Exception as e:
-        print(f"❌ Error clearing conversations: {e}")
+        print(f"❌ Error clearing global decoys: {e}")
 
 
 # ===================================================================
@@ -473,7 +540,10 @@ def init_db():
 
 # Print SQL for table creation (to be run in Supabase SQL Editor)
 SUPABASE_SCHEMA_SQL = """
+-- =====================================================================
+-- CONFUSER SUPABASE SCHEMA v2.0 - Global Decoy Repository
 -- Run this in Supabase SQL Editor to create required tables
+-- =====================================================================
 
 -- 1. Profiles table (linked to auth.users)
 CREATE TABLE IF NOT EXISTS profiles (
@@ -482,17 +552,15 @@ CREATE TABLE IF NOT EXISTS profiles (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Enable RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- RLS Policy: Users can only see their own profile
 CREATE POLICY "Users can view own profile" ON profiles
     FOR SELECT USING (auth.uid() = id);
 
 CREATE POLICY "Users can insert own profile" ON profiles
     FOR INSERT WITH CHECK (auth.uid() = id);
 
--- 2. Chat Sessions table
+-- 2. Chat Sessions table (Private per user)
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -500,10 +568,8 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Enable RLS
 ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
 
--- RLS Policy: Users can only see their own sessions
 CREATE POLICY "Users can view own sessions" ON chat_sessions
     FOR SELECT USING (auth.uid() = user_id);
 
@@ -516,7 +582,7 @@ CREATE POLICY "Users can delete own sessions" ON chat_sessions
 CREATE POLICY "Users can update own sessions" ON chat_sessions
     FOR UPDATE USING (auth.uid() = user_id);
 
--- 3. Chat Messages table
+-- 3. Chat Messages table (Private per user)
 CREATE TABLE IF NOT EXISTS chat_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID REFERENCES chat_sessions(id) ON DELETE CASCADE,
@@ -527,10 +593,8 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Enable RLS
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
 
--- RLS Policy: Users can only see their own messages
 CREATE POLICY "Users can view own messages" ON chat_messages
     FOR SELECT USING (auth.uid() = user_id);
 
@@ -540,33 +604,44 @@ CREATE POLICY "Users can insert own messages" ON chat_messages
 CREATE POLICY "Users can delete own messages" ON chat_messages
     FOR DELETE USING (auth.uid() = user_id);
 
--- 4. Conversations table (for decoys - PUBLIC for peer insights)
-CREATE TABLE IF NOT EXISTS conversations (
+-- =====================================================================
+-- 4. GLOBAL DECOYS TABLE (Anonymous Public Repository)
+-- This is the core privacy feature - decoys are shared across ALL users
+-- NO user_id stored to ensure complete anonymity
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS global_decoys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    original_query TEXT NOT NULL,
-    ai_response TEXT NOT NULL,
-    is_decoy BOOLEAN DEFAULT FALSE,
-    parent_id UUID,
-    source_id TEXT,
-    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    query TEXT NOT NULL,                           -- Obfuscated decoy query
+    response TEXT NOT NULL,                        -- Obfuscated AI response
+    topics TEXT[] DEFAULT '{}',                    -- Topic keywords for categorization
+    source_id TEXT,                                -- Batch ID for deduplication
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Enable RLS but allow public read for decoys
-ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+-- Enable RLS with PUBLIC access for authenticated users
+ALTER TABLE global_decoys ENABLE ROW LEVEL SECURITY;
 
--- RLS Policy: Anyone can read decoys (they're anonymized)
-CREATE POLICY "Anyone can read decoys" ON conversations
-    FOR SELECT USING (is_decoy = TRUE);
+-- RLS Policy: ALL authenticated users can READ all decoys (they're anonymous)
+CREATE POLICY "Authenticated users can read all decoys" ON global_decoys
+    FOR SELECT TO authenticated
+    USING (TRUE);
 
--- RLS Policy: Service role can insert (from backend)
-CREATE POLICY "Service can insert conversations" ON conversations
-    FOR INSERT WITH CHECK (TRUE);
+-- RLS Policy: ALL authenticated users can INSERT decoys (contribute to pool)
+CREATE POLICY "Authenticated users can insert decoys" ON global_decoys
+    FOR INSERT TO authenticated
+    WITH CHECK (TRUE);
+
+-- RLS Policy: Only allow DELETE via service role (admin cleanup)
+-- No user can delete individual decoys to prevent gaming the system
 
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON chat_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_session_id ON chat_messages(session_id);
-CREATE INDEX IF NOT EXISTS idx_conversations_source_id ON conversations(source_id);
-CREATE INDEX IF NOT EXISTS idx_conversations_is_decoy ON conversations(is_decoy);
+CREATE INDEX IF NOT EXISTS idx_global_decoys_source_id ON global_decoys(source_id);
+CREATE INDEX IF NOT EXISTS idx_global_decoys_created_at ON global_decoys(created_at DESC);
+
+-- Optional: Full-text search on decoy queries for future semantic search
+-- CREATE INDEX IF NOT EXISTS idx_global_decoys_query_fts ON global_decoys USING gin(to_tsvector('english', query));
 """
 
 if __name__ == "__main__":

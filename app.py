@@ -11,6 +11,7 @@ Features:
 """
 
 import streamlit as st
+from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 from openai import OpenAI
 from layer1_matching import SemanticMatcher
 from layer2_confuser import perturb_text, sanitize_response_consistency, perturb_pair
@@ -68,6 +69,13 @@ if "current_session_id" not in st.session_state:
 if "debug_mode" not in st.session_state:
     st.session_state.debug_mode = False
 
+if "generated_decoy_sources" not in st.session_state:
+    # Track source_ids of decoys generated in this session to prevent self-matching
+    st.session_state.generated_decoy_sources = set()
+
+# Toggle for sync vs async decoy generation (set to True for debugging)
+SYNC_DECOY_GENERATION = os.environ.get("SYNC_DECOY_GENERATION", "false").lower() == "true"
+
 
 # ===================================================================
 # HELPER FUNCTIONS
@@ -101,16 +109,51 @@ def get_ai_response(query, api_key):
 
 def find_stratified_insights(user_query, api_key, debug_mode=False, exclude_source_id=None):
     """
-    Search for similar past queries and return a STRATIFIED list of insights.
-    """
-    past_conversations = db.get_all_queries()
+    Search for similar past queries from GLOBAL DECOYS and return a STRATIFIED list of insights.
     
-    if not past_conversations:
+    The global_decoys table is anonymous - no user_id is stored, so all authenticated users
+    can see all decoys. This is the core privacy feature.
+    
+    Args:
+        user_query (str): The user's query to find matches for
+        api_key (str): DeepSeek API key for LLM validation
+        debug_mode (bool): Enable debug output
+        exclude_source_id (str): Source ID to exclude (prevents seeing your own just-generated decoys)
+        
+    Returns:
+        list: List of insight dicts with question, response, layer, score
+    """
+    # Get all global decoys (anonymous, shared across all users)
+    global_decoys = db.get_all_global_decoys()
+    
+    if not global_decoys:
         return []
     
-    candidate_ids = [conv[0] for conv in past_conversations]
-    candidate_queries = [conv[1] for conv in past_conversations]
-    source_ids = [conv[3] for conv in past_conversations]
+    candidate_ids = [conv[0] for conv in global_decoys]
+    candidate_queries = [conv[1] for conv in global_decoys]
+    source_ids = [conv[3] for conv in global_decoys]
+    
+    # Additional self-match filtering: exclude decoys from this session
+    # This prevents seeing decoys that were just generated from your own queries
+    session_excluded_sources = st.session_state.get('generated_decoy_sources', set())
+    
+    # Filter out candidates from excluded sources
+    if session_excluded_sources or exclude_source_id:
+        filtered_data = []
+        for i, (cid, cquery, _, sid) in enumerate(global_decoys):
+            # Skip if source_id matches current generation OR is in session exclusion list
+            if sid == exclude_source_id:
+                continue
+            if sid in session_excluded_sources:
+                continue
+            filtered_data.append((cid, cquery, sid))
+        
+        if not filtered_data:
+            return []
+            
+        candidate_ids = [d[0] for d in filtered_data]
+        candidate_queries = [d[1] for d in filtered_data]
+        source_ids = [d[2] for d in filtered_data]
     
     matcher = st.session_state.matcher
     
@@ -121,14 +164,16 @@ def find_stratified_insights(user_query, api_key, debug_mode=False, exclude_sour
     for match in matches:
         try:
             query_text = match['query']
-            response_text = db.get_response_by_query(query_text)
+            # Get response from global_decoys table
+            response_text = db.get_global_decoy_response(query_text)
             
-            insights.append({
-                "question": query_text,
-                "response": response_text,
-                "layer": match['layer'],
-                "score": match['score']
-            })
+            if response_text:
+                insights.append({
+                    "question": query_text,
+                    "response": response_text,
+                    "layer": match['layer'],
+                    "score": match['score']
+                })
         except Exception as e:
             print(f"Error processing match: {e}")
             continue
@@ -314,14 +359,55 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
                 # Save assistant message to database
                 db.save_message(st.session_state.current_session_id, "assistant", response, peer_insights=peer_insights)
                 
-                # Trigger async decoy generation
-                generation_thread = threading.Thread(
-                    target=generate_decoys,
-                    args=(prompt, response, st.session_state.api_key),
-                    kwargs={"num_decoys": 3, "source_id": current_source_id}
-                )
-                generation_thread.start()
+                # Track this source_id to prevent self-matching in future queries
+                st.session_state.generated_decoy_sources.add(current_source_id)
                 
+                # Trigger decoy generation (saves to global_decoys table)
+                # Pre-cache Supabase credentials for background thread access
+                os.environ["SUPABASE_URL"] = st.secrets.get("SUPABASE_URL", "")
+                os.environ["SUPABASE_KEY"] = st.secrets.get("SUPABASE_KEY", "")
+
+                if SYNC_DECOY_GENERATION:
+                    # SYNCHRONOUS MODE: For debugging - blocks UI but guarantees saves
+                    st.toast("🛡️ Generating decoys (sync mode)...", icon="🔄")
+                    try:
+                        print(f"🔄 [SYNC] Starting decoy generation for source_id: {current_source_id[:8]}...")
+                        generate_decoys(prompt, response, st.session_state.api_key, num_decoys=3, source_id=current_source_id)
+                        print(f"✅ [SYNC] Decoy generation completed!")
+                        st.toast("✅ Decoys saved to global repository!", icon="✅")
+                    except Exception as e:
+                        import traceback
+                        print(f"❌ [SYNC] Decoy generation failed: {e}")
+                        print(f"❌ [SYNC] Traceback: {traceback.format_exc()}")
+                        st.warning(f"Decoy generation failed: {e}")
+                else:
+                    # ASYNC MODE: Non-blocking background thread
+                    # Capture current script context for thread
+                    current_ctx = get_script_run_ctx()
+
+                    def generate_decoys_with_callback(prompt, response, api_key, num_decoys, source_id):
+                        """Wrapper to catch errors and log results."""
+                        try:
+                            print(f"🔄 [THREAD] Starting decoy generation for source_id: {source_id[:8]}...")
+                            generate_decoys(prompt, response, api_key, num_decoys=num_decoys, source_id=source_id)
+                            print(f"✅ [THREAD] Decoy generation completed for source_id: {source_id[:8]}...")
+                        except Exception as e:
+                            import traceback
+                            print(f"❌ [THREAD] Decoy generation failed: {e}")
+                            print(f"❌ [THREAD] Traceback: {traceback.format_exc()}")
+
+                    generation_thread = threading.Thread(
+                        target=generate_decoys_with_callback,
+                        args=(prompt, response, st.session_state.api_key, 3, current_source_id)
+                    )
+
+                    # CRITICAL: Add Streamlit script context to the thread
+                    add_script_run_ctx(generation_thread, current_ctx)
+
+                    generation_thread.start()
+
+                    st.toast("🛡️ Decoy generation started...", icon="🔄")
+
                 st.caption("🛡️ Privacy: Decoys are being generated in the background...")
                 
             except Exception as e:

@@ -64,6 +64,34 @@ OUTPUT JSON ONLY:
 """
 
 
+def extract_topics_from_rationale(rationale: str) -> list:
+    """
+    Extract topic keywords from the decoy rationale for categorization.
+    
+    Args:
+        rationale (str): The rationale text (e.g., "Swapped Python for Go; Changed Seattle to Austin.")
+        
+    Returns:
+        list: List of topic keywords
+    """
+    if not rationale:
+        return []
+    
+    topics = []
+    
+    # Common patterns to extract
+    # "Swapped X for Y" -> extract Y
+    # "Changed X to Y" -> extract Y
+    import re
+    
+    # Find "for X" or "to X" patterns
+    swap_patterns = re.findall(r'(?:for|to)\s+(\w+)', rationale, re.IGNORECASE)
+    topics.extend(swap_patterns)
+    
+    # Limit to 5 topics
+    return list(set(topics))[:5]
+
+
 def call_judge(original_query, decoy_query, api_key, base_url="https://api.deepseek.com"):
     """
     Call the Judge LLM to determine if a decoy matches the original's core intent.
@@ -302,12 +330,35 @@ Original Response: {original_response}"""
                 print(f"   Saving [{i+1}]: {rationale_preview}... (sim: {d['similarity']:.3f})")
 
                 # Fix response (Layer 3 consistency)
+                print(f"   [L4] Fixing response via Layer 3...")
                 fixed_response = check_and_fix_response(d['response'], api_key)
-                # Save only query and response
-                db.save_conversation(d['query'], fixed_response, is_decoy=True, parent_id=None, source_id=batch_id)
-                print(f"   ✅ Saved Decoy {i+1}/{len(valid_decoys)}")
+                print(f"   [L4] Response fixed, length: {len(fixed_response)}")
+
+                # Extract topics from rationale for categorization
+                topics = extract_topics_from_rationale(d.get('rationale', ''))
+                print(f"   [L4] Extracted topics: {topics}")
+
+                # Save to GLOBAL DECOYS table (anonymous, shared across all users)
+                print(f"   [L4] Calling db.save_global_decoy() -> global_decoys table")
+                print(f"   [L4] Query: {d['query'][:60]}...")
+                print(f"   [L4] Source ID: {batch_id[:8]}...")
+
+                result_id = db.save_global_decoy(
+                    query=d['query'],
+                    response=fixed_response,
+                    topics=topics,
+                    source_id=batch_id
+                )
+
+                if result_id:
+                    print(f"   ✅ Saved Global Decoy {i+1}/{len(valid_decoys)} (ID: {result_id[:8]}...)")
+                else:
+                    print(f"   ⚠️ save_global_decoy returned None for decoy {i+1}")
+
             except Exception as save_e:
+                import traceback
                 print(f"   ❌ Error saving decoy {i}: {save_e}")
+                print(f"   ❌ Traceback: {traceback.format_exc()}")
 
     except Exception as e:
         print(f"❌ Batch Generation failed: {e}")

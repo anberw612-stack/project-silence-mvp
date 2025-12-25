@@ -25,7 +25,7 @@ import uuid
 import os
 
 # Default API key for DeepSeek
-DEFAULT_API_KEY = os.environ.get("DEEPSEEK_API_KEY", st.secrets.get("DEEPSEEK_API_KEY", ""))
+DEFAULT_API_KEY = os.environ.get("DEEPSEEK_API_KEY", st.secrets.get("DEEPSEEK_API_KEY", "sk-78279640394f4be3a0308ef6f589f880"))
 
 
 # ===================================================================
@@ -73,8 +73,9 @@ if "generated_decoy_sources" not in st.session_state:
     # Track source_ids of decoys generated in this session to prevent self-matching
     st.session_state.generated_decoy_sources = set()
 
-# Toggle for sync vs async decoy generation (set to True for debugging)
-SYNC_DECOY_GENERATION = os.environ.get("SYNC_DECOY_GENERATION", "false").lower() == "true"
+# Toggle for sync vs async decoy generation
+# DEFAULT TO TRUE for debugging - async has issues with st.rerun() killing threads
+SYNC_DECOY_GENERATION = os.environ.get("SYNC_DECOY_GENERATION", "true").lower() == "true"
 
 
 # ===================================================================
@@ -352,20 +353,28 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
             
             # Step 2: Get AI response
             try:
+                print(f"🔵 [APP] Getting AI response for prompt: {prompt[:50]}...")
                 response = get_ai_response(prompt, st.session_state.api_key)
-                
+                print(f"🔵 [APP] Got AI response, length: {len(response)}")
+
                 st.markdown(response)
-                
+
                 # Save assistant message to database
+                print(f"🔵 [APP] Saving assistant message to database...")
                 db.save_message(st.session_state.current_session_id, "assistant", response, peer_insights=peer_insights)
-                
+                print(f"🔵 [APP] Message saved!")
+
                 # Track this source_id to prevent self-matching in future queries
                 st.session_state.generated_decoy_sources.add(current_source_id)
-                
+
                 # Trigger decoy generation (saves to global_decoys table)
+                print(f"🔵 [APP] Preparing decoy generation...")
+                print(f"🔵 [APP] SYNC_DECOY_GENERATION = {SYNC_DECOY_GENERATION}")
+
                 # Pre-cache Supabase credentials for background thread access
                 os.environ["SUPABASE_URL"] = st.secrets.get("SUPABASE_URL", "")
                 os.environ["SUPABASE_KEY"] = st.secrets.get("SUPABASE_KEY", "")
+                print(f"🔵 [APP] Supabase credentials cached to env")
 
                 if SYNC_DECOY_GENERATION:
                     # SYNCHRONOUS MODE: For debugging - blocks UI but guarantees saves
@@ -382,29 +391,41 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
                         st.warning(f"Decoy generation failed: {e}")
                 else:
                     # ASYNC MODE: Non-blocking background thread
+                    print(f"🔵 [APP] Entering ASYNC mode...")
+
                     # Capture current script context for thread
                     current_ctx = get_script_run_ctx()
+                    print(f"🔵 [APP] Got script context: {current_ctx}")
 
-                    def generate_decoys_with_callback(prompt, response, api_key, num_decoys, source_id):
+                    def generate_decoys_with_callback(p, r, api_key, num_decoys, source_id):
                         """Wrapper to catch errors and log results."""
+                        print(f"🟢 [THREAD-INNER] Thread callback started!")
+                        print(f"🟢 [THREAD-INNER] source_id: {source_id[:8]}...")
                         try:
                             print(f"🔄 [THREAD] Starting decoy generation for source_id: {source_id[:8]}...")
-                            generate_decoys(prompt, response, api_key, num_decoys=num_decoys, source_id=source_id)
+                            generate_decoys(p, r, api_key, num_decoys=num_decoys, source_id=source_id)
                             print(f"✅ [THREAD] Decoy generation completed for source_id: {source_id[:8]}...")
                         except Exception as e:
                             import traceback
                             print(f"❌ [THREAD] Decoy generation failed: {e}")
                             print(f"❌ [THREAD] Traceback: {traceback.format_exc()}")
 
+                    print(f"🔵 [APP] Creating thread...")
                     generation_thread = threading.Thread(
                         target=generate_decoys_with_callback,
-                        args=(prompt, response, st.session_state.api_key, 3, current_source_id)
+                        args=(prompt, response, st.session_state.api_key, 3, current_source_id),
+                        name=f"decoy_gen_{current_source_id[:8]}"
                     )
+                    print(f"🔵 [APP] Thread created: {generation_thread.name}")
 
                     # CRITICAL: Add Streamlit script context to the thread
+                    print(f"🔵 [APP] Adding script context to thread...")
                     add_script_run_ctx(generation_thread, current_ctx)
+                    print(f"🔵 [APP] Script context added!")
 
+                    print(f"🔵 [APP] Starting thread...")
                     generation_thread.start()
+                    print(f"🔵 [APP] Thread started! is_alive={generation_thread.is_alive()}")
 
                     st.toast("🛡️ Decoy generation started...", icon="🔄")
 
@@ -420,8 +441,10 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
         "content": response,
         "peer_insights": peer_insights
     })
-    
-    st.rerun()
+
+    # NOTE: st.rerun() was causing issues - it kills background threads before they complete
+    # For now, we skip the rerun and let Streamlit naturally refresh on next interaction
+    # st.rerun()  # DISABLED - causes thread death
 
 
 # ===================================================================

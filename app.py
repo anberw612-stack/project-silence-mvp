@@ -353,7 +353,7 @@ def render_email_composer():
     # Use st.dialog for the email composer (Streamlit 1.33+)
     @st.dialog("💬 Message Anonymous Peer", width="large")
     def email_dialog():
-        # Context preview
+        # Context preview - shows what question this is about
         if st.session_state.email_insight_context:
             st.markdown(f"""
             <div class="composer-context">
@@ -361,13 +361,8 @@ def render_email_composer():
             </div>
             """, unsafe_allow_html=True)
 
-        # Form fields
-        to_field = st.text_input(
-            "To (Anonymous Peer ID)",
-            value=st.session_state.email_to or "peer_" + str(uuid.uuid4())[:8] + "@confuser.anon",
-            disabled=True,
-            help="This is an anonymized identifier - the actual user remains private"
-        )
+        # Simple label instead of useless disabled input
+        st.caption("📨 To: The anonymous peer who asked this question")
 
         subject = st.text_input(
             "Subject",
@@ -394,7 +389,7 @@ def render_email_composer():
                 if body.strip():
                     # Call the mock send function
                     result = send_peer_message(
-                        to_email=to_field,
+                        to_email="anonymous_peer",  # No fake email, just a placeholder for the backend
                         subject=subject,
                         body=body,
                         insight_context=st.session_state.email_insight_context

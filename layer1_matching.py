@@ -31,7 +31,7 @@ class SemanticMatcher:
     the most similar query from a predefined database.
     """
     
-    def __init__(self, model_name='BAAI/bge-small-zh-v1.5', threshold=GLOBAL_MIN_THRESHOLD):
+    def __init__(self, model_name='BAAI/bge-small-en-v1.5', threshold=GLOBAL_MIN_THRESHOLD):
         """
         Initialize the semantic matcher with a sentence transformer model.
         

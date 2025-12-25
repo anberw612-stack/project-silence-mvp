@@ -80,8 +80,8 @@ if "generated_decoy_sources" not in st.session_state:
     st.session_state.generated_decoy_sources = set()
 
 # Toggle for sync vs async decoy generation
-# DEFAULT TO TRUE for debugging - async has issues with st.rerun() killing threads
-SYNC_DECOY_GENERATION = os.environ.get("SYNC_DECOY_GENERATION", "true").lower() == "true"
+# HARDCODED TO TRUE - async has issues with st.rerun() killing threads
+SYNC_DECOY_GENERATION = True  # Hardcoded for stability
 
 
 # ===================================================================
@@ -142,25 +142,27 @@ def find_stratified_insights(user_query, api_key, debug_mode=False, exclude_sour
     
     # Additional self-match filtering: exclude decoys from this session
     # This prevents seeing decoys that were just generated from your own queries
-    session_excluded_sources = st.session_state.get('generated_decoy_sources', set())
-    
+    # DISABLED FOR TESTING - uncomment to re-enable self-exclusion
+    # session_excluded_sources = st.session_state.get('generated_decoy_sources', set())
+
     # Filter out candidates from excluded sources
-    if session_excluded_sources or exclude_source_id:
-        filtered_data = []
-        for i, (cid, cquery, _, sid) in enumerate(global_decoys):
-            # Skip if source_id matches current generation OR is in session exclusion list
-            if sid == exclude_source_id:
-                continue
-            if sid in session_excluded_sources:
-                continue
-            filtered_data.append((cid, cquery, sid))
-        
-        if not filtered_data:
-            return []
-            
-        candidate_ids = [d[0] for d in filtered_data]
-        candidate_queries = [d[1] for d in filtered_data]
-        source_ids = [d[2] for d in filtered_data]
+    # DISABLED FOR TESTING - allows seeing your own decoys to verify pipeline
+    # if session_excluded_sources or exclude_source_id:
+    #     filtered_data = []
+    #     for i, (cid, cquery, _, sid) in enumerate(global_decoys):
+    #         # Skip if source_id matches current generation OR is in session exclusion list
+    #         if sid == exclude_source_id:
+    #             continue
+    #         if sid in session_excluded_sources:
+    #             continue
+    #         filtered_data.append((cid, cquery, sid))
+    #
+    #     if not filtered_data:
+    #         return []
+    #
+    #     candidate_ids = [d[0] for d in filtered_data]
+    #     candidate_queries = [d[1] for d in filtered_data]
+    #     source_ids = [d[2] for d in filtered_data]
     
     matcher = st.session_state.matcher
     
@@ -448,9 +450,8 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
         "peer_insights": peer_insights
     })
 
-    # NOTE: st.rerun() was causing issues - it kills background threads before they complete
-    # For now, we skip the rerun and let Streamlit naturally refresh on next interaction
-    # st.rerun()  # DISABLED - causes thread death
+    # Re-enabled: Safe now that we're using SYNC mode (threads complete before rerun)
+    st.rerun()
 
 
 # ===================================================================

@@ -176,7 +176,7 @@ def generate_decoys(original_query, original_response, api_key, num_decoys=3, ba
 
         # Load embedding model for QC
         print("   Loading QC model...")
-        qc_model = SentenceTransformer('all-MiniLM-L6-v2')
+        qc_model = SentenceTransformer('BAAI/bge-small-en-v1.5')
         original_embedding = qc_model.encode([original_query], convert_to_numpy=True)
 
         # Initialize API client

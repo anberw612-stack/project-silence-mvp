@@ -376,16 +376,29 @@ def save_global_decoy(query: str, response: str, topics: list = None, source_id:
         print(f"🔄 [DB] Inserting into global_decoys table...")
         response_obj = supabase.table('global_decoys').insert(decoy_data).execute()
 
+        # Enhanced logging for debugging
+        print(f"🔍 [DB] Raw response_obj: {response_obj}")
+        print(f"🔍 [DB] response_obj.data: {response_obj.data}")
+        print(f"🔍 [DB] response_obj type: {type(response_obj)}")
+
+        if hasattr(response_obj, 'error') and response_obj.error:
+            print(f"❌ [DB] Supabase error: {response_obj.error}")
+
+        if hasattr(response_obj, 'status_code'):
+            print(f"🔍 [DB] Status code: {response_obj.status_code}")
+
         if response_obj.data:
             print(f"✅ [DB] SUCCESS! Decoy saved to global_decoys with id: {decoy_id[:8]}...")
             return response_obj.data[0]['id']
         else:
             print(f"⚠️ [DB] Insert returned no data. Response: {response_obj}")
+            print(f"⚠️ [DB] Full response attributes: {dir(response_obj)}")
             return None
 
     except Exception as e:
         import traceback
         print(f"❌ [DB] Error saving global decoy: {e}")
+        print(f"❌ [DB] Exception type: {type(e).__name__}")
         print(f"❌ [DB] Traceback: {traceback.format_exc()}")
         return None
 

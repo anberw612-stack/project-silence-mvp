@@ -98,7 +98,7 @@ def get_ai_response(query, api_key):
             api_key=api_key,
             base_url="https://api.deepseek.com"
         )
-        
+
         response = client.chat.completions.create(
             model="deepseek-chat",
             messages=[
@@ -106,11 +106,11 @@ def get_ai_response(query, api_key):
                 {"role": "user", "content": query}
             ],
             temperature=0.7,
-            max_tokens=1000
+            max_tokens=4096  # Increased from 1000 to allow complete code responses
         )
-        
+
         return response.choices[0].message.content.strip()
-        
+
     except Exception as e:
         raise Exception(f"API Error: {str(e)}")
 

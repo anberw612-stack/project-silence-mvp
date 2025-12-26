@@ -343,15 +343,19 @@ def delete_session(session_id: str):
 # GLOBAL DECOYS FUNCTIONS (Anonymous Public Repository)
 # ===================================================================
 
-def save_global_decoy(query: str, response: str, topics: list = None, source_id: str = None) -> str:
+def save_global_decoy(query: str, response: str, topics: list = None, source_id: str = None, owner_user_id: str = None) -> str:
     """
-    Save a decoy to the global_decoys table (anonymous, shared across all users).
+    Save a decoy to the global_decoys table (shared across all users).
+
+    Note: owner_user_id is stored for email relay purposes but is NOT exposed
+    to other users when they view decoys. The decoy content remains anonymous.
 
     Args:
         query (str): The obfuscated decoy query
         response (str): The obfuscated AI response
         topics (list): Optional list of topic keywords for categorization
         source_id (str): Batch ID to group sibling decoys (for deduplication)
+        owner_user_id (str): The user_id of the decoy creator (for email relay)
 
     Returns:
         str: The ID of the inserted row, or None on failure
@@ -370,6 +374,7 @@ def save_global_decoy(query: str, response: str, topics: list = None, source_id:
             'response': response,
             'topics': topics if topics else [],
             'source_id': source_id,
+            'owner_user_id': owner_user_id,  # Store owner for email relay
             'created_at': datetime.now().isoformat()
         }
 
@@ -406,27 +411,29 @@ def save_global_decoy(query: str, response: str, topics: list = None, source_id:
 def get_all_global_decoys(limit: int = 500) -> list:
     """
     Retrieve all decoys from the global repository for Semantic Matching (Layer 1).
-    
+
     This is the PUBLIC decoy pool - anonymous and shared across all users.
-    
+    Now includes owner_user_id for email relay functionality.
+
     Args:
         limit (int): Maximum number of decoys to return
-    
+
     Returns:
-        list: List of tuples (id, query_text, created_at, source_id)
+        list: List of tuples (id, query_text, created_at, source_id, owner_user_id)
     """
     try:
         supabase = get_supabase_client()
-        
+
         response = supabase.table('global_decoys') \
-            .select('id, query, created_at, source_id') \
+            .select('id, query, created_at, source_id, owner_user_id') \
             .order('created_at', desc=True) \
             .limit(limit) \
             .execute()
-        
+
         # Convert to list of tuples for compatibility with existing code
-        return [(d['id'], d['query'], d['created_at'], d['source_id']) for d in response.data] if response.data else []
-        
+        # Now includes owner_user_id at index 4
+        return [(d['id'], d['query'], d['created_at'], d['source_id'], d.get('owner_user_id')) for d in response.data] if response.data else []
+
     except Exception as e:
         print(f"❌ Error retrieving global decoys: {e}")
         return []
@@ -435,26 +442,76 @@ def get_all_global_decoys(limit: int = 500) -> list:
 def get_global_decoy_response(query_text: str) -> str:
     """
     Retrieve the AI response for a specific decoy query from global_decoys.
-    
+
     Args:
         query_text (str): The query to search for
-        
+
     Returns:
         str: The AI response or None
     """
     try:
         supabase = get_supabase_client()
-        
+
         response = supabase.table('global_decoys') \
             .select('response') \
             .eq('query', query_text) \
             .limit(1) \
             .execute()
-        
+
         return response.data[0]['response'] if response.data else None
-        
+
     except Exception as e:
         print(f"❌ Error retrieving global decoy response: {e}")
+        return None
+
+
+def get_decoy_owner_email(query_text: str) -> str:
+    """
+    Retrieve the owner's email for a specific decoy (for email relay).
+
+    This looks up the owner_user_id from global_decoys, then fetches
+    the email from the profiles table.
+
+    Args:
+        query_text (str): The decoy query to look up
+
+    Returns:
+        str: The owner's email address, or None if not found
+    """
+    try:
+        supabase = get_supabase_client()
+
+        # Step 1: Get owner_user_id from the decoy
+        decoy_response = supabase.table('global_decoys') \
+            .select('owner_user_id') \
+            .eq('query', query_text) \
+            .limit(1) \
+            .execute()
+
+        if not decoy_response.data or not decoy_response.data[0].get('owner_user_id'):
+            print(f"⚠️ [DB] No owner_user_id found for decoy")
+            return None
+
+        owner_user_id = decoy_response.data[0]['owner_user_id']
+        print(f"🔍 [DB] Found owner_user_id: {owner_user_id[:8]}...")
+
+        # Step 2: Get email from profiles table
+        profile_response = supabase.table('profiles') \
+            .select('email') \
+            .eq('id', owner_user_id) \
+            .limit(1) \
+            .execute()
+
+        if profile_response.data:
+            owner_email = profile_response.data[0]['email']
+            print(f"✅ [DB] Found owner email: {owner_email}")
+            return owner_email
+
+        print(f"⚠️ [DB] No profile found for user_id: {owner_user_id[:8]}...")
+        return None
+
+    except Exception as e:
+        print(f"❌ Error retrieving decoy owner email: {e}")
         return None
 
 
@@ -620,7 +677,7 @@ CREATE POLICY "Users can delete own messages" ON chat_messages
 -- =====================================================================
 -- 4. GLOBAL DECOYS TABLE (Anonymous Public Repository)
 -- This is the core privacy feature - decoys are shared across ALL users
--- NO user_id stored to ensure complete anonymity
+-- owner_user_id is stored ONLY for email relay, NOT exposed to viewers
 -- =====================================================================
 CREATE TABLE IF NOT EXISTS global_decoys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -628,8 +685,12 @@ CREATE TABLE IF NOT EXISTS global_decoys (
     response TEXT NOT NULL,                        -- Obfuscated AI response
     topics TEXT[] DEFAULT '{}',                    -- Topic keywords for categorization
     source_id TEXT,                                -- Batch ID for deduplication
+    owner_user_id UUID REFERENCES auth.users(id), -- Owner for email relay (hidden from UI)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- NOTE: Run this migration if table already exists:
+-- ALTER TABLE global_decoys ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES auth.users(id);
 
 -- Enable RLS with PUBLIC access for authenticated users
 ALTER TABLE global_decoys ENABLE ROW LEVEL SECURITY;

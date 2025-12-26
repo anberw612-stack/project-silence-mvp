@@ -85,11 +85,13 @@ if "generated_decoy_sources" not in st.session_state:
 if "show_email_composer" not in st.session_state:
     st.session_state.show_email_composer = False
 if "email_to" not in st.session_state:
-    st.session_state.email_to = ""
+    st.session_state.email_to = ""  # Will store the decoy owner's REAL email
 if "email_subject" not in st.session_state:
     st.session_state.email_subject = ""
 if "email_insight_context" not in st.session_state:
     st.session_state.email_insight_context = ""
+if "email_recipient_email" not in st.session_state:
+    st.session_state.email_recipient_email = ""  # The actual recipient email (looked up from decoy)
 
 # Toggle for sync vs async decoy generation
 # HARDCODED TO TRUE - async has issues with st.rerun() killing threads
@@ -100,33 +102,120 @@ SYNC_DECOY_GENERATION = True  # Hardcoded for stability
 # HELPER FUNCTIONS
 # ===================================================================
 
-def send_peer_message(to_email: str, subject: str, body: str, insight_context: str = "") -> dict:
+def send_peer_message(to_email: str, subject: str, body: str, insight_context: str = "", sender_email: str = None) -> dict:
     """
-    Mock function to send an email/message to a peer user.
-    This is a placeholder - connect your actual email API (SendGrid, SMTP, etc.) later.
+    Send an anonymous relay email to a peer user via Outlook SMTP.
+
+    The email is sent FROM the system bot account (configured in secrets)
+    TO the real user's email address (looked up from the decoy owner).
 
     Args:
-        to_email: Recipient email (anonymized peer identifier)
+        to_email: Recipient's real email address (from decoy owner lookup)
         subject: Email subject line
         body: Email body content
-        insight_context: The insight question that triggered this conversation
+        insight_context: The decoy question that triggered this conversation
+        sender_email: The sender's email (for reply-to, optional)
 
     Returns:
         dict with status and message
     """
-    # TODO: Replace with actual email sending logic (smtplib, SendGrid, etc.)
-    print(f"📧 [EMAIL] Mock send triggered:")
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    print(f"📧 [EMAIL] Attempting to send email...")
     print(f"   To: {to_email}")
     print(f"   Subject: {subject}")
-    print(f"   Body: {body[:100]}...")
-    print(f"   Context: {insight_context[:50]}...")
 
-    # Mock success response
-    return {
-        "status": "success",
-        "message": f"Message sent to anonymous peer",
-        "timestamp": str(uuid.uuid4())[:8]
-    }
+    # Validate recipient
+    if not to_email or to_email == "anonymous_peer" or "@" not in to_email:
+        print(f"❌ [EMAIL] Invalid recipient: {to_email}")
+        return {
+            "status": "error",
+            "message": "Could not find recipient email. The decoy owner may not have an email on file."
+        }
+
+    try:
+        # Load bot credentials from Streamlit secrets
+        bot_email = st.secrets["email"]["EMAIL_ADDRESS"]
+        bot_password = st.secrets["email"]["EMAIL_PASSWORD"]
+
+        print(f"   Bot: {bot_email}")
+
+        # Create the email
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"[Confuser] {subject}"
+        msg['From'] = f"Confuser Bot <{bot_email}>"
+        msg['To'] = to_email
+
+        # Build email body with context
+        email_body = f"""
+Hi there,
+
+Someone on Confuser wants to connect with you regarding a question you asked.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 Your Original Question (paraphrased):
+{insight_context[:200]}{'...' if len(insight_context) > 200 else ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💬 Their Message:
+{body}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+This is an anonymous relay message. The sender's identity is protected.
+To reply, you can respond to this email (it will be relayed back anonymously).
+
+—
+Confuser - Privacy-Preserving AI Chat
+🛡️ Your data, your control.
+"""
+
+        # Create plain text and HTML versions
+        text_part = MIMEText(email_body, 'plain', 'utf-8')
+        msg.attach(text_part)
+
+        # Connect to Outlook SMTP server
+        print(f"   Connecting to smtp.office365.com:587...")
+        with smtplib.SMTP('smtp.office365.com', 587) as server:
+            server.starttls()  # Enable TLS
+            print(f"   Logging in...")
+            server.login(bot_email, bot_password)
+            print(f"   Sending email...")
+            server.sendmail(bot_email, to_email, msg.as_string())
+
+        print(f"✅ [EMAIL] Successfully sent to {to_email}")
+        return {
+            "status": "success",
+            "message": f"Message sent successfully!",
+            "timestamp": str(uuid.uuid4())[:8]
+        }
+
+    except KeyError as ke:
+        print(f"❌ [EMAIL] Missing secret: {ke}")
+        return {
+            "status": "error",
+            "message": "Email configuration missing. Please set up email secrets."
+        }
+    except smtplib.SMTPAuthenticationError as auth_err:
+        print(f"❌ [EMAIL] Authentication failed: {auth_err}")
+        return {
+            "status": "error",
+            "message": "Email authentication failed. Check bot credentials."
+        }
+    except smtplib.SMTPException as smtp_err:
+        print(f"❌ [EMAIL] SMTP error: {smtp_err}")
+        return {
+            "status": "error",
+            "message": f"Failed to send email: {str(smtp_err)}"
+        }
+    except Exception as e:
+        print(f"❌ [EMAIL] Unexpected error: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to send email: {str(e)}"
+        }
 
 
 def inject_insight_bar_css():
@@ -346,6 +435,7 @@ def render_insight_with_chat_button(insight: dict, index: int):
 def render_email_composer():
     """
     Render the fixed-position email composer overlay using Streamlit dialog.
+    Looks up the decoy owner's email and sends a real email via SMTP.
     """
     if not st.session_state.show_email_composer:
         return
@@ -361,8 +451,15 @@ def render_email_composer():
             </div>
             """, unsafe_allow_html=True)
 
-        # Simple label instead of useless disabled input
-        st.caption("📨 To: The anonymous peer who asked this question")
+        # Look up the owner's email from the decoy
+        recipient_email = st.session_state.get("email_recipient_email", "")
+
+        # Check if we have a valid recipient
+        if recipient_email and "@" in recipient_email:
+            st.caption(f"📨 To: Anonymous peer (email on file)")
+        else:
+            st.warning("⚠️ This decoy doesn't have owner information. Email may not be deliverable.")
+            st.caption("📨 To: Anonymous peer (no email on file)")
 
         subject = st.text_input(
             "Subject",
@@ -387,9 +484,12 @@ def render_email_composer():
         with col2:
             if st.button("Send Message", type="primary", use_container_width=True):
                 if body.strip():
-                    # Call the mock send function
+                    # Get the recipient email that was looked up when the button was clicked
+                    to_email = st.session_state.get("email_recipient_email", "")
+
+                    # Send the actual email via SMTP
                     result = send_peer_message(
-                        to_email="anonymous_peer",  # No fake email, just a placeholder for the backend
+                        to_email=to_email,
                         subject=subject,
                         body=body,
                         insight_context=st.session_state.email_insight_context
@@ -650,9 +750,12 @@ for msg_idx, message in enumerate(st.session_state.messages):
                         # "..." button with tooltip using native Streamlit
                         unique_key = f"chat_btn_hist_{msg_idx}_{insight_idx}"
                         if st.button("⋯", key=unique_key, help="💬 Chat with them"):
+                            # Look up the owner's email from the decoy question
+                            owner_email = db.get_decoy_owner_email(insight['question'])
                             st.session_state.show_email_composer = True
                             st.session_state.email_insight_context = insight['question']
                             st.session_state.email_subject = f"Re: {insight['question'][:50]}..."
+                            st.session_state.email_recipient_email = owner_email or ""
                             st.rerun()
 
 
@@ -727,9 +830,12 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
                             # "..." button with tooltip using native Streamlit
                             unique_key = f"chat_btn_new_{new_insight_idx}_{current_source_id[:8]}"
                             if st.button("⋯", key=unique_key, help="💬 Chat with them"):
+                                # Look up the owner's email from the decoy question
+                                owner_email = db.get_decoy_owner_email(insight['question'])
                                 st.session_state.show_email_composer = True
                                 st.session_state.email_insight_context = insight['question']
                                 st.session_state.email_subject = f"Re: {insight['question'][:50]}..."
+                                st.session_state.email_recipient_email = owner_email or ""
                                 st.rerun()
 
             # Step 2: Get AI response
@@ -768,8 +874,11 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
                         # SYNCHRONOUS MODE: For debugging - blocks UI but guarantees saves
                         st.toast("🛡️ Generating privacy decoys...", icon="🔄")
                         try:
+                            # Get current user ID for email relay
+                            current_user_id = db.get_current_user_id()
                             print(f"🔄 [SYNC] Starting decoy generation for source_id: {current_source_id[:8]}...")
-                            generate_decoys(prompt, response, st.session_state.api_key, num_decoys=3, source_id=current_source_id)
+                            print(f"🔄 [SYNC] Owner user_id: {current_user_id[:8] if current_user_id else 'None'}...")
+                            generate_decoys(prompt, response, st.session_state.api_key, num_decoys=3, source_id=current_source_id, owner_user_id=current_user_id)
                             print(f"✅ [SYNC] Decoy generation completed!")
                             st.toast("✅ Privacy decoys saved!", icon="✅")
                         except Exception as e:
@@ -781,17 +890,21 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
                         # ASYNC MODE: Non-blocking background thread
                         print(f"🔵 [APP] Entering ASYNC mode...")
 
+                        # Get current user ID for email relay (must capture before thread)
+                        current_user_id = db.get_current_user_id()
+
                         # Capture current script context for thread
                         current_ctx = get_script_run_ctx()
                         print(f"🔵 [APP] Got script context: {current_ctx}")
 
-                        def generate_decoys_with_callback(p, r, api_key, num_decoys, source_id):
+                        def generate_decoys_with_callback(p, r, api_key, num_decoys, source_id, owner_user_id):
                             """Wrapper to catch errors and log results."""
                             print(f"🟢 [THREAD-INNER] Thread callback started!")
                             print(f"🟢 [THREAD-INNER] source_id: {source_id[:8]}...")
+                            print(f"🟢 [THREAD-INNER] owner_user_id: {owner_user_id[:8] if owner_user_id else 'None'}...")
                             try:
                                 print(f"🔄 [THREAD] Starting decoy generation for source_id: {source_id[:8]}...")
-                                generate_decoys(p, r, api_key, num_decoys=num_decoys, source_id=source_id)
+                                generate_decoys(p, r, api_key, num_decoys=num_decoys, source_id=source_id, owner_user_id=owner_user_id)
                                 print(f"✅ [THREAD] Decoy generation completed for source_id: {source_id[:8]}...")
                             except Exception as e:
                                 import traceback
@@ -801,7 +914,7 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
                         print(f"🔵 [APP] Creating thread...")
                         generation_thread = threading.Thread(
                             target=generate_decoys_with_callback,
-                            args=(prompt, response, st.session_state.api_key, 3, current_source_id),
+                            args=(prompt, response, st.session_state.api_key, 3, current_source_id, current_user_id),
                             name=f"decoy_gen_{current_source_id[:8]}"
                         )
                         print(f"🔵 [APP] Thread created: {generation_thread.name}")

@@ -164,7 +164,7 @@ Compare these two queries. Do they share the same Core Intent (A), Focus (B), an
         return "MISMATCH"
 
 
-def generate_decoys(original_query, original_response, api_key, num_decoys=3, base_url="https://api.deepseek.com", source_id=None):
+def generate_decoys(original_query, original_response, api_key, num_decoys=3, base_url="https://api.deepseek.com", source_id=None, owner_user_id=None):
     """
     Generate decoy conversations using Batch Generation with LLM Arbitration.
 
@@ -181,6 +181,7 @@ def generate_decoys(original_query, original_response, api_key, num_decoys=3, ba
         num_decoys (int): Target number of valid decoys (default: 3)
         base_url (str): API base URL
         source_id (str): Optional source_id to tag decoys for deduplication
+        owner_user_id (str): The user_id of the decoy creator (for email relay)
     """
     try:
         if not original_query or not original_response:
@@ -375,16 +376,19 @@ Original Response: {original_response}"""
                 topics = extract_topics_from_rationale(d.get('rationale', ''))
                 print(f"   [L4] Extracted topics: {topics}")
 
-                # Save to GLOBAL DECOYS table (anonymous, shared across all users)
+                # Save to GLOBAL DECOYS table (shared across all users)
+                # owner_user_id is stored for email relay but NOT exposed in UI
                 print(f"   [L4] Calling db.save_global_decoy() -> global_decoys table")
                 print(f"   [L4] Query: {d['query'][:60]}...")
                 print(f"   [L4] Source ID: {batch_id[:8]}...")
+                print(f"   [L4] Owner User ID: {owner_user_id[:8] if owner_user_id else 'None'}...")
 
                 result_id = db.save_global_decoy(
                     query=d['query'],
                     response=fixed_response,
                     topics=topics,
-                    source_id=batch_id
+                    source_id=batch_id,
+                    owner_user_id=owner_user_id
                 )
 
                 if result_id:

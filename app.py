@@ -167,6 +167,23 @@ def send_peer_message(to_email: str, subject: str, body: str, insight_context: s
 
         print(f"   Bot: {bot_email}")
 
+        # Determine SMTP server based on email domain
+        if "gmail" in bot_email.lower():
+            smtp_server = "smtp.gmail.com"
+            smtp_port = 587
+        elif "outlook" in bot_email.lower() or "hotmail" in bot_email.lower():
+            smtp_server = "smtp.office365.com"
+            smtp_port = 587
+        elif "yahoo" in bot_email.lower():
+            smtp_server = "smtp.mail.yahoo.com"
+            smtp_port = 587
+        else:
+            # Default to Gmail
+            smtp_server = "smtp.gmail.com"
+            smtp_port = 587
+
+        print(f"   SMTP Server: {smtp_server}:{smtp_port}")
+
         # Create the email
         msg = MIMEMultipart('alternative')
         msg['Subject'] = f"[Confuser] {subject}"
@@ -300,9 +317,9 @@ Confuser - Privacy-Preserving AI Chat
         msg.attach(text_part)
         msg.attach(html_part)
 
-        # Connect to Outlook SMTP server
-        print(f"   Connecting to smtp.office365.com:587...")
-        with smtplib.SMTP('smtp.office365.com', 587) as server:
+        # Connect to SMTP server (auto-detected based on email domain)
+        print(f"   Connecting to {smtp_server}:{smtp_port}...")
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
             server.starttls()  # Enable TLS
             print(f"   Logging in...")
             server.login(bot_email, bot_password)

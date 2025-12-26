@@ -149,6 +149,19 @@ def send_peer_message(to_email: str, subject: str, body: str, insight_context: s
 
     try:
         # Load bot credentials from Streamlit secrets
+        # Debug: Print available secrets keys (not values!)
+        print(f"   Available secrets keys: {list(st.secrets.keys())}")
+
+        if "email" not in st.secrets:
+            print(f"❌ [EMAIL] 'email' section not found in secrets!")
+            print(f"   Hint: Add [email] section to your Streamlit secrets")
+            return {
+                "status": "error",
+                "message": "Email secrets not configured. Add [email] section with EMAIL_ADDRESS and EMAIL_PASSWORD."
+            }
+
+        print(f"   Email section keys: {list(st.secrets['email'].keys())}")
+
         bot_email = st.secrets["email"]["EMAIL_ADDRESS"]
         bot_password = st.secrets["email"]["EMAIL_PASSWORD"]
 

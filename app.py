@@ -148,33 +148,132 @@ def send_peer_message(to_email: str, subject: str, body: str, insight_context: s
         msg['From'] = f"Confuser Bot <{bot_email}>"
         msg['To'] = to_email
 
-        # Build email body with context
-        email_body = f"""
-Hi there,
+        # Plain text version (fallback)
+        plain_text = f"""
+Someone on Confuser wants to connect with you!
 
-Someone on Confuser wants to connect with you regarding a question you asked.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📝 Your Original Question (paraphrased):
+Regarding your question:
 {insight_context[:200]}{'...' if len(insight_context) > 200 else ''}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-💬 Their Message:
+Their message:
 {body}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
+This is a one-way anonymous notification. The sender's identity is protected.
+If the sender included contact information in their message, you can reach out to them directly.
 
-This is an anonymous relay message. The sender's identity is protected.
-To reply, you can respond to this email (it will be relayed back anonymously).
-
-—
 Confuser - Privacy-Preserving AI Chat
-🛡️ Your data, your control.
 """
 
-        # Create plain text and HTML versions
-        text_part = MIMEText(email_body, 'plain', 'utf-8')
+        # LinkedIn-style HTML email template
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f3f2ef;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f2ef; padding: 20px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding: 20px 40px; text-align: center;">
+                            <span style="font-size: 24px; font-weight: bold; color: #0a66c2;">🛡️ Confuser</span>
+                        </td>
+                    </tr>
+
+                    <!-- Main Card -->
+                    <tr>
+                        <td>
+                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 4px 8px rgba(0,0,0,0.08);">
+                                <!-- Notification Header -->
+                                <tr>
+                                    <td style="padding: 24px 24px 16px 24px;">
+                                        <table width="100%" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td width="56" valign="top">
+                                                    <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 48px; font-size: 20px;">
+                                                        💬
+                                                    </div>
+                                                </td>
+                                                <td style="padding-left: 12px;">
+                                                    <p style="margin: 0; font-size: 16px; font-weight: 600; color: #000000;">Someone wants to connect with you</p>
+                                                    <p style="margin: 4px 0 0 0; font-size: 14px; color: #666666;">via Confuser Anonymous Relay</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+
+                                <!-- Divider -->
+                                <tr>
+                                    <td style="padding: 0 24px;">
+                                        <hr style="border: none; border-top: 1px solid #e8e8e8; margin: 0;">
+                                    </td>
+                                </tr>
+
+                                <!-- Context Section -->
+                                <tr>
+                                    <td style="padding: 20px 24px;">
+                                        <p style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: #666666; text-transform: uppercase; letter-spacing: 0.5px;">Regarding your question</p>
+                                        <div style="background-color: #f8f9fa; border-left: 3px solid #0a66c2; padding: 12px 16px; border-radius: 0 8px 8px 0;">
+                                            <p style="margin: 0; font-size: 14px; color: #333333; font-style: italic;">"{insight_context[:200]}{'...' if len(insight_context) > 200 else ''}"</p>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- Message Section -->
+                                <tr>
+                                    <td style="padding: 0 24px 24px 24px;">
+                                        <p style="margin: 0 0 12px 0; font-size: 12px; font-weight: 600; color: #666666; text-transform: uppercase; letter-spacing: 0.5px;">Their Message</p>
+                                        <div style="background-color: #ffffff; border: 1px solid #e8e8e8; border-radius: 8px; padding: 16px;">
+                                            <p style="margin: 0; font-size: 15px; color: #000000; line-height: 1.6; white-space: pre-wrap;">{body}</p>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!-- Notice Section -->
+                                <tr>
+                                    <td style="padding: 0 24px 24px 24px;">
+                                        <div style="background-color: #fff8e6; border: 1px solid #ffc107; border-radius: 8px; padding: 12px 16px;">
+                                            <p style="margin: 0; font-size: 13px; color: #856404;">
+                                                <strong>📌 Note:</strong> This is a one-way anonymous notification. The sender's identity is protected.
+                                                If they included contact information in their message, you can reach out to them directly.
+                                            </p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 24px 40px; text-align: center;">
+                            <p style="margin: 0 0 8px 0; font-size: 12px; color: #666666;">
+                                This email was sent by <strong>Confuser</strong> - Privacy-Preserving AI Chat
+                            </p>
+                            <p style="margin: 0; font-size: 11px; color: #999999;">
+                                🛡️ Your data, your control. We never share your email with other users.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+"""
+
+        # Attach both plain text and HTML versions
+        text_part = MIMEText(plain_text, 'plain', 'utf-8')
+        html_part = MIMEText(html_body, 'html', 'utf-8')
         msg.attach(text_part)
+        msg.attach(html_part)
 
         # Connect to Outlook SMTP server
         print(f"   Connecting to smtp.office365.com:587...")
@@ -471,6 +570,13 @@ def render_email_composer():
             "Message",
             height=150,
             placeholder="Write your message here...\n\nYour identity remains private - only your message content will be shared."
+        )
+
+        # One-way communication notice
+        st.info(
+            "💡 **Note:** This is a one-way anonymous notification. "
+            "If you wish the recipient to contact you back, please leave a secure contact method "
+            "(e.g., WeChat ID, Telegram, or a temporary email) in your message."
         )
 
         # Action buttons

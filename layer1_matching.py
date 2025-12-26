@@ -23,6 +23,32 @@ MOCK_DB = [
 # Global Thresholds
 GLOBAL_MIN_THRESHOLD = 0.635  # Lowered to enable conditional Déjà vu rescue
 
+# Semantic Gatekeeper Prompt - Strict 3-Dimension Check
+CONSISTENCY_CHECK_PROMPT = """
+You are a Semantic Relevance Judge.
+Task: Compare the USER QUERY vs. the CANDIDATE DECOY on 3 Dimensions.
+Dimensions: A. Core Focus: The specific domain or topic (e.g., Medical, Coding, Relationship, Legal). B. Emotional Intent: The user's mood (e.g., Anxious, Curious, Angry, Venting). C. Core Need: What they want (e.g., Specific Solution, Empathy, Validation).
+
+JUDGMENT RULES (Strict Priority):
+
+MISMATCH: If Dimension A (Core Focus) is DIFFERENT.
+
+Example: "How to fix Python bug" (Coding) vs "How to cure flu" (Medical).
+
+RESULT: Reject immediately.
+
+PARTIAL: If Dimension A is the SAME, but B or C are DIFFERENT.
+
+Example: "I hate my boss" (Venting) vs "How to negotiate salary" (Solution). Focus is same (Career), but intent differs.
+
+RESULT: Mark as valid but loose match.
+
+PERFECT: If A, B, and C are ALL the SAME.
+
+RESULT: Mark as high-quality match.
+
+OUTPUT JSON ONLY: { "judgment": "PERFECT" | "PARTIAL" | "MISMATCH", "reason": "Brief explanation of the dimensions" }
+"""
 
 
 class SemanticMatcher:
@@ -95,14 +121,18 @@ class SemanticMatcher:
 
     def apply_consistency_filter(self, user_query, candidate_items, api_key):
         """
-        Dual-Validation & Classification System.
+        Semantic Gatekeeper - Strict 3-Dimension Validation.
 
-        Step 1 (Qualitative): LLM classifies candidates as PERFECT/PARTIAL/MISMATCH.
-                              MISMATCH candidates are immediately discarded.
+        Validates candidates against 3 dimensions:
+        A. Core Focus: The specific domain/topic (Medical, Coding, etc.)
+        B. Emotional Intent: User's mood (Anxious, Curious, Venting, etc.)
+        C. Core Need: What they want (Solution, Empathy, Validation, etc.)
 
-        Step 2 (Quantitative): For PERFECT/PARTIAL candidates, apply semantic thresholds
-                               to determine their Layer (Precision/Resonance/Déjà vu).
-                               Candidates with score <= 0.635 are discarded (even if PERFECT intent).
+        Processing Logic:
+        Step 0 (Safety Net): If score < 0.635, discard immediately.
+        Step 1 (MISMATCH): If Dimension A differs, discard immediately.
+        Step 2 (PARTIAL): If A same but B/C differ, FORCE into 'Déjà vu' layer.
+        Step 3 (PERFECT): If A, B, C all match, assign layer by cosine score.
 
         Args:
             user_query (str): The original user query.
@@ -113,103 +143,144 @@ class SemanticMatcher:
             list: Filtered list of candidate_items with 'layer' key populated.
         """
         if not api_key:
-            print("⚠️ No API key provided for Consistency Layer. Skipping filter.")
+            print("⚠️ No API key provided for Semantic Gatekeeper. Skipping filter.")
             return candidate_items
 
         if not candidate_items:
             return []
 
-        print(f"🧠 Dual-Validation Filter: Processing {len(candidate_items)} candidates...")
+        print(f"🧠 Semantic Gatekeeper: Processing {len(candidate_items)} candidates...")
+
+        # ===================================================================
+        # STEP 0: Safety Net - Pre-filter by minimum score threshold
+        # ===================================================================
+        pre_filtered = []
+        discarded_low_score = 0
+
+        for item in candidate_items:
+            score = item.get('score', 0)
+            if score < 0.635:
+                discarded_low_score += 1
+                print(f"   ⛔ [{item.get('id', '?')[:8]}...] Score {score:.3f} < 0.635 -> Discarded (Safety Net)")
+            else:
+                pre_filtered.append(item)
+
+        print(f"   Step 0: {discarded_low_score} discarded (score < 0.635), {len(pre_filtered)} remain")
+
+        if not pre_filtered:
+            print(f"✅ Semantic Gatekeeper Complete: All candidates below threshold")
+            return []
 
         try:
             client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
-            candidates_text = "\n".join([f"[{i}] {item['query']}" for i, item in enumerate(candidate_items)])
-
-            prompt = f"""
-Analyze the User Query based on 3 dimensions:
-A. **Core Focus** (e.g., Academic Stress, Career Planning, Romance)
-B. **Emotional Intent** (e.g., Seeking Comfort, Seeking Information, Venting, Boasting)
-C. **Core Need** (e.g., "I need empathy", "I need a tutorial", "I need validation")
-
-User Query: "{user_query}"
-
-Classify each candidate in the list below into one of three categories:
-- **PERFECT**: Matches Focus (A), Intent (B), AND Need (C) closely.
-- **PARTIAL**: Matches Intent (B) OR Need (C), but not both perfectly.
-- **MISMATCH**: Does not match Intent (B) or Need (C) at all.
-
-Candidate List:
-{candidates_text}
-
-Return a JSON object mapping each candidate index to its category.
-Example: {{ "0": "PERFECT", "1": "MISMATCH", "2": "PARTIAL", "3": "PERFECT" }}
-"""
-            response = client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
-                temperature=0.1
-            )
-
-            result = json.loads(response.choices[0].message.content)
-
             # ===================================================================
-            # STEP 1: LLM Classification (Qualitative Check)
-            # Discard MISMATCH candidates immediately.
-            # ===================================================================
-            qualified_candidates = []
-            mismatch_count = 0
-
-            for i, item in enumerate(candidate_items):
-                category = result.get(str(i), "MISMATCH").upper()
-
-                if category == "MISMATCH":
-                    mismatch_count += 1
-                    print(f"   ❌ [{i}] MISMATCH (Intent/Need mismatch) -> Discarded")
-                else:
-                    item['intent_category'] = category  # PERFECT or PARTIAL
-                    qualified_candidates.append(item)
-
-            print(f"   Step 1 Result: {mismatch_count} MISMATCH discarded, {len(qualified_candidates)} remain")
-
-            # ===================================================================
-            # STEP 2: Semantic Classification (Quantitative Check)
-            # Apply PRD Pyramid thresholds to determine Layer.
+            # LLM JUDGMENT: Call DeepSeek for each candidate individually
+            # This ensures accurate 3-dimension analysis per candidate
             # ===================================================================
             final_candidates = []
+            mismatch_count = 0
+            partial_count = 0
+            perfect_count = 0
 
-            for item in qualified_candidates:
+            for i, item in enumerate(pre_filtered):
+                candidate_query = item['query']
                 score = item.get('score', 0)
-                intent = item.get('intent_category', 'PARTIAL')
 
-                # Layer 1 (Precision): score > 0.85
-                if score > 0.85:
-                    item['layer'] = 'Precision'
-                    final_candidates.append(item)
-                    print(f"   ✅ [{item.get('id')}] {intent} + Score {score:.3f} -> Precision")
+                # Build prompt using the CONSISTENCY_CHECK_PROMPT template
+                prompt = f"""{CONSISTENCY_CHECK_PROMPT}
 
-                # Layer 2 (Resonance): 0.75 < score <= 0.85
-                elif score > 0.75:
-                    item['layer'] = 'Resonance'
-                    final_candidates.append(item)
-                    print(f"   ✅ [{item.get('id')}] {intent} + Score {score:.3f} -> Resonance")
+USER QUERY: "{user_query}"
 
-                # Layer 3 (Déjà vu): 0.635 < score <= 0.75
-                elif score > 0.635:
-                    item['layer'] = 'Déjà vu'
-                    final_candidates.append(item)
-                    print(f"   ✅ [{item.get('id')}] {intent} + Score {score:.3f} -> Déjà vu")
+CANDIDATE DECOY: "{candidate_query}"
 
-                # Kill Zone: score <= 0.635
-                else:
-                    print(f"   ❌ [{item.get('id')}] {intent} Intent but Low Score ({score:.3f}) -> Discarded")
+Analyze and output JSON only."""
 
-            print(f"✅ Dual-Validation Complete: {len(candidate_items)} -> {len(final_candidates)} candidates")
+                try:
+                    response = client.chat.completions.create(
+                        model="deepseek-chat",
+                        messages=[{"role": "user", "content": prompt}],
+                        response_format={"type": "json_object"},
+                        temperature=0.1,
+                        max_tokens=200
+                    )
+
+                    result = json.loads(response.choices[0].message.content)
+                    judgment = result.get('judgment', 'MISMATCH').upper()
+                    reason = result.get('reason', 'No reason provided')
+
+                    # Normalize judgment value
+                    if judgment not in ['PERFECT', 'PARTIAL', 'MISMATCH']:
+                        judgment = 'MISMATCH'
+
+                    print(f"   [{i}] Score: {score:.3f} | Judgment: {judgment}")
+                    print(f"       Reason: {reason[:80]}...")
+
+                    # ===================================================================
+                    # STEP 1: MISMATCH - Dimension A (Core Focus) differs
+                    # Discard immediately regardless of score
+                    # ===================================================================
+                    if judgment == 'MISMATCH':
+                        mismatch_count += 1
+                        print(f"   ❌ [{i}] MISMATCH (Core Focus differs) -> Discarded")
+                        continue
+
+                    # ===================================================================
+                    # STEP 2: PARTIAL - Dimension A same, but B or C differs
+                    # FORCE into 'Déjà vu' layer regardless of high score
+                    # ===================================================================
+                    if judgment == 'PARTIAL':
+                        partial_count += 1
+                        item['layer'] = 'Déjà vu'  # Force to lowest tier
+                        item['intent_category'] = 'PARTIAL'
+                        item['judgment_reason'] = reason
+                        final_candidates.append(item)
+                        print(f"   ⚠️ [{i}] PARTIAL -> Forced to Déjà vu (Score: {score:.3f})")
+                        continue
+
+                    # ===================================================================
+                    # STEP 3: PERFECT - All 3 dimensions match
+                    # Assign layer based on cosine similarity score
+                    # ===================================================================
+                    if judgment == 'PERFECT':
+                        perfect_count += 1
+                        item['intent_category'] = 'PERFECT'
+                        item['judgment_reason'] = reason
+
+                        # Layer assignment by score (standard PRD Pyramid)
+                        if score > 0.85:
+                            item['layer'] = 'Precision'
+                            print(f"   ✅ [{i}] PERFECT + Score {score:.3f} -> Precision")
+                        elif score > 0.75:
+                            item['layer'] = 'Resonance'
+                            print(f"   ✅ [{i}] PERFECT + Score {score:.3f} -> Resonance")
+                        else:
+                            item['layer'] = 'Déjà vu'
+                            print(f"   ✅ [{i}] PERFECT + Score {score:.3f} -> Déjà vu")
+
+                        final_candidates.append(item)
+
+                except json.JSONDecodeError as je:
+                    print(f"   ⚠️ [{i}] JSON parse error: {je} -> Treating as MISMATCH")
+                    mismatch_count += 1
+                except Exception as inner_e:
+                    print(f"   ⚠️ [{i}] LLM call error: {inner_e} -> Treating as MISMATCH")
+                    mismatch_count += 1
+
+            print(f"\n📊 Semantic Gatekeeper Summary:")
+            print(f"   Input: {len(candidate_items)} candidates")
+            print(f"   Safety Net (score < 0.635): {discarded_low_score} discarded")
+            print(f"   MISMATCH (Core Focus differs): {mismatch_count} discarded")
+            print(f"   PARTIAL (forced to Déjà vu): {partial_count} kept")
+            print(f"   PERFECT (layer by score): {perfect_count} kept")
+            print(f"   Output: {len(final_candidates)} candidates")
+
             return final_candidates
 
         except Exception as e:
-            print(f"❌ Dual-Validation Filter Failed: {e}")
+            print(f"❌ Semantic Gatekeeper Failed: {e}")
+            import traceback
+            print(f"   Traceback: {traceback.format_exc()}")
             return candidate_items  # Fail open to avoid breaking app
 
     def get_stratified_matches(self, user_query, candidate_queries, candidate_ids, source_ids=None, exclude_source_id=None, match_batch_id=None, api_key=None):

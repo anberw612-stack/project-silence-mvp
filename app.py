@@ -18,6 +18,7 @@ from layer1_matching import SemanticMatcher
 from layer2_confuser import perturb_text, sanitize_response_consistency, perturb_pair
 from layer3_consistency import check_and_fix_response
 from layer4_decoy_factory import generate_decoys
+from decoy_worker import DecoyWorker, get_or_create_worker, stop_worker, get_worker_status
 import database_manager as db
 import auth_ui
 import numpy as np
@@ -25,6 +26,7 @@ import threading
 import uuid
 import os
 import json
+import time
 
 # Default API key for DeepSeek
 DEFAULT_API_KEY = os.environ.get("DEEPSEEK_API_KEY", st.secrets.get("DEEPSEEK_API_KEY", "sk-78279640394f4be3a0308ef6f589f880"))
@@ -51,10 +53,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Toggle for sync vs async decoy generation
+# Set to False to use new background worker architecture
+SYNC_DECOY_GENERATION = False  # Use background worker for non-blocking generation
+
 # DEBUG: Print at app start to confirm code version
 print("=" * 60)
-print("🚀 APP STARTED - CODE VERSION: 2025-12-25-v3-SYNC-MODE")
-print(f"🚀 SYNC_DECOY_GENERATION will be: {os.environ.get('SYNC_DECOY_GENERATION', 'true')}")
+print("🚀 APP STARTED - CODE VERSION: 2025-12-26-v1-BACKGROUND-WORKER")
+print(f"🚀 SYNC_DECOY_GENERATION: {SYNC_DECOY_GENERATION}")
 print("=" * 60)
 
 
@@ -93,9 +99,15 @@ if "email_insight_context" not in st.session_state:
 if "email_recipient_email" not in st.session_state:
     st.session_state.email_recipient_email = ""  # The actual recipient email (looked up from decoy)
 
-# Toggle for sync vs async decoy generation
-# HARDCODED TO TRUE - async has issues with st.rerun() killing threads
-SYNC_DECOY_GENERATION = True  # Hardcoded for stability
+# Background worker state
+if "decoy_worker" not in st.session_state:
+    st.session_state.decoy_worker = None  # Will hold DecoyWorker instance
+if "decoy_worker_session_id" not in st.session_state:
+    st.session_state.decoy_worker_session_id = str(uuid.uuid4())  # Unique ID for this session's worker
+if "last_decoy_count" not in st.session_state:
+    st.session_state.last_decoy_count = 0  # Track decoy count for polling
+if "worker_task_id" not in st.session_state:
+    st.session_state.worker_task_id = None  # Current task ID
 
 
 # ===================================================================
@@ -802,7 +814,54 @@ with st.sidebar:
         )
     
     st.divider()
-    
+
+    # --- Background Worker Status ---
+    worker = st.session_state.get("decoy_worker")
+    if worker and worker.is_running():
+        st.subheader("🔄 Decoy Generation")
+        status = worker.get_status()
+
+        # Progress indicator
+        decoys_generated = status.get("decoys_generated", 0)
+        target_decoys = 3  # Default target
+        progress = min(decoys_generated / target_decoys, 1.0) if target_decoys > 0 else 0
+
+        st.progress(progress, text=f"Generated {decoys_generated}/{target_decoys} decoys")
+
+        # Status text
+        worker_status = status.get("status", "unknown")
+        if worker_status == "running":
+            st.caption("⏳ Background generation in progress...")
+            # Show a refresh button and hint about auto-refresh
+            if st.button("🔄 Refresh Status", use_container_width=True, key="refresh_worker_status"):
+                st.rerun()
+            st.caption("💡 Click refresh or switch tabs to check progress")
+        elif worker_status == "completed":
+            st.caption("✅ Generation complete!")
+        elif worker_status == "failed":
+            error_msg = status.get("error_message", "Unknown error")
+            st.caption(f"❌ Failed: {error_msg}")
+
+        # Stop button
+        if st.button("🛑 Stop Generation", use_container_width=True):
+            worker.stop()
+            st.toast("Stopped background generation", icon="🛑")
+            st.rerun()
+
+        st.divider()
+    elif worker:
+        # Show last completed status briefly
+        status = worker.get_status()
+        worker_status = status.get("status", "idle")
+        if worker_status == "completed":
+            decoys_generated = status.get("decoys_generated", 0)
+            st.success(f"✅ Last run: {decoys_generated} decoys generated")
+            st.divider()
+        elif worker_status == "failed":
+            error_msg = status.get("error_message", "Unknown error")
+            st.error(f"❌ Last run failed: {error_msg[:50]}...")
+            st.divider()
+
     # --- Database Stats ---
     with st.expander("📊 Stats", expanded=False):
         conv_count = db.get_conversation_count()
@@ -971,17 +1030,17 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
                     print(f"🔵 [APP] Preparing decoy generation...")
                     print(f"🔵 [APP] SYNC_DECOY_GENERATION = {SYNC_DECOY_GENERATION}")
 
-                    # Pre-cache Supabase credentials for background thread access
-                    os.environ["SUPABASE_URL"] = st.secrets.get("SUPABASE_URL", "")
-                    os.environ["SUPABASE_KEY"] = st.secrets.get("SUPABASE_KEY", "")
-                    print(f"🔵 [APP] Supabase credentials cached to env")
+                    # Get Supabase credentials
+                    supabase_url = st.secrets.get("SUPABASE_URL", "")
+                    supabase_key = st.secrets.get("SUPABASE_KEY", "")
+
+                    # Get current user ID for email relay
+                    current_user_id = db.get_current_user_id()
 
                     if SYNC_DECOY_GENERATION:
                         # SYNCHRONOUS MODE: For debugging - blocks UI but guarantees saves
                         st.toast("🛡️ Generating privacy decoys...", icon="🔄")
                         try:
-                            # Get current user ID for email relay
-                            current_user_id = db.get_current_user_id()
                             print(f"🔄 [SYNC] Starting decoy generation for source_id: {current_source_id[:8]}...")
                             print(f"🔄 [SYNC] Owner user_id: {current_user_id[:8] if current_user_id else 'None'}...")
                             generate_decoys(prompt, response, st.session_state.api_key, num_decoys=3, source_id=current_source_id, owner_user_id=current_user_id)
@@ -993,48 +1052,32 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
                             print(f"❌ [SYNC] Traceback: {traceback.format_exc()}")
                             st.warning(f"Decoy generation failed: {e}")
                     else:
-                        # ASYNC MODE: Non-blocking background thread
-                        print(f"🔵 [APP] Entering ASYNC mode...")
+                        # BACKGROUND WORKER MODE: Non-blocking, survives tab switches
+                        print(f"🔵 [APP] Using Background Worker mode...")
 
-                        # Get current user ID for email relay (must capture before thread)
-                        current_user_id = db.get_current_user_id()
-
-                        # Capture current script context for thread
-                        current_ctx = get_script_run_ctx()
-                        print(f"🔵 [APP] Got script context: {current_ctx}")
-
-                        def generate_decoys_with_callback(p, r, api_key, num_decoys, source_id, owner_user_id):
-                            """Wrapper to catch errors and log results."""
-                            print(f"🟢 [THREAD-INNER] Thread callback started!")
-                            print(f"🟢 [THREAD-INNER] source_id: {source_id[:8]}...")
-                            print(f"🟢 [THREAD-INNER] owner_user_id: {owner_user_id[:8] if owner_user_id else 'None'}...")
-                            try:
-                                print(f"🔄 [THREAD] Starting decoy generation for source_id: {source_id[:8]}...")
-                                generate_decoys(p, r, api_key, num_decoys=num_decoys, source_id=source_id, owner_user_id=owner_user_id)
-                                print(f"✅ [THREAD] Decoy generation completed for source_id: {source_id[:8]}...")
-                            except Exception as e:
-                                import traceback
-                                print(f"❌ [THREAD] Decoy generation failed: {e}")
-                                print(f"❌ [THREAD] Traceback: {traceback.format_exc()}")
-
-                        print(f"🔵 [APP] Creating thread...")
-                        generation_thread = threading.Thread(
-                            target=generate_decoys_with_callback,
-                            args=(prompt, response, st.session_state.api_key, 3, current_source_id, current_user_id),
-                            name=f"decoy_gen_{current_source_id[:8]}"
+                        # Get or create worker for this session
+                        worker = get_or_create_worker(
+                            session_id=st.session_state.decoy_worker_session_id,
+                            api_key=st.session_state.api_key,
+                            supabase_url=supabase_url,
+                            supabase_key=supabase_key
                         )
-                        print(f"🔵 [APP] Thread created: {generation_thread.name}")
 
-                        # CRITICAL: Add Streamlit script context to the thread
-                        print(f"🔵 [APP] Adding script context to thread...")
-                        add_script_run_ctx(generation_thread, current_ctx)
-                        print(f"🔵 [APP] Script context added!")
+                        # Store worker reference in session state
+                        st.session_state.decoy_worker = worker
 
-                        print(f"🔵 [APP] Starting thread...")
-                        generation_thread.start()
-                        print(f"🔵 [APP] Thread started! is_alive={generation_thread.is_alive()}")
+                        # Start the background generation
+                        task_id = worker.start(
+                            original_query=prompt,
+                            original_response=response,
+                            owner_user_id=current_user_id,
+                            source_id=current_source_id
+                        )
 
-                        st.toast("🛡️ Decoy generation started...", icon="🔄")
+                        st.session_state.worker_task_id = task_id
+                        print(f"🚀 [APP] Background worker started (task_id: {task_id[:8]}...)")
+
+                        st.toast("🛡️ Privacy decoys generating in background...", icon="🔄")
 
                     st.caption("🛡️ Privacy protection active for this conversation.")
                 

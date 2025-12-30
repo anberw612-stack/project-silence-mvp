@@ -1,0 +1,99 @@
+{
+  "app": {
+    "name": "城府AI",
+    "tagline": "隐私优先的智能对话",
+    "description": "您的对话，由智能隐私层全方位保护"
+  },
+  "nav": {
+    "home": "首页",
+    "settings": "设置",
+    "logout": "退出登录",
+    "language": "语言"
+  },
+  "auth": {
+    "login": "登录",
+    "register": "注册",
+    "email": "邮箱",
+    "password": "密码",
+    "confirm_password": "确认密码",
+    "login_button": "立即登录",
+    "register_button": "创建账户",
+    "logging_in": "正在登录...",
+    "registering": "正在创建账户...",
+    "login_success": "登录成功！",
+    "register_success": "账户创建成功！",
+    "login_error": "登录失败，请检查您的账号密码。",
+    "register_error": "注册失败，请重试。",
+    "password_mismatch": "两次输入的密码不一致",
+    "welcome_back": "欢迎回来",
+    "create_account": "创建您的账户",
+    "already_have_account": "已有账户？",
+    "need_account": "需要注册账户？"
+  },
+  "chat": {
+    "input_placeholder": "有什么想问的...",
+    "thinking": "思考中...",
+    "send": "发送",
+    "clear_history": "清空历史",
+    "new_chat": "新对话",
+    "chat_history": "历史记录",
+    "no_messages": "暂无消息，开始您的对话吧！"
+  },
+  "sidebar": {
+    "api_key": "API 密钥",
+    "api_key_placeholder": "请输入您的 DeepSeek API 密钥",
+    "debug_mode": "调试模式",
+    "user_info": "用户信息",
+    "logged_in_as": "当前登录"
+  },
+  "peer_insights": {
+    "title": "群体智慧",
+    "no_insights": "未找到相关的群体洞察",
+    "similarity": "相似度",
+    "layer_precision": "精准匹配",
+    "layer_resonance": "共鸣匹配",
+    "layer_discovery": "发现匹配",
+    "view_more": "查看更多",
+    "anonymous_peer": "匿名用户",
+    "ai_response": "AI 回复"
+  },
+  "email_composer": {
+    "title": "发送消息给对方",
+    "context": "回复",
+    "your_message": "您的消息",
+    "message_placeholder": "在这里写下您的消息...",
+    "send": "发送消息",
+    "cancel": "取消",
+    "sending": "发送中...",
+    "sent_success": "消息发送成功！",
+    "sent_error": "消息发送失败，请重试。"
+  },
+  "privacy": {
+    "protected": "已保护",
+    "processing": "正在通过隐私层处理...",
+    "layer0": "隐私路由",
+    "layer1": "语义匹配",
+    "layer2": "隐私扰动",
+    "layer3": "一致性检查",
+    "layer4": "诱饵生成"
+  },
+  "errors": {
+    "generic": "出现了一些问题，请重试。",
+    "network": "网络错误，请检查您的网络连接。",
+    "api_key_required": "请提供 API 密钥",
+    "session_expired": "会话已过期，请重新登录。"
+  },
+  "common": {
+    "loading": "加载中...",
+    "save": "保存",
+    "cancel": "取消",
+    "confirm": "确认",
+    "delete": "删除",
+    "edit": "编辑",
+    "close": "关闭",
+    "back": "返回",
+    "next": "下一步",
+    "yes": "是",
+    "no": "否"
+  }
+}

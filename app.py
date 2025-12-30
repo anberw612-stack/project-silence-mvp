@@ -8,6 +8,7 @@ Features:
 - Supabase Auth (Email/Password)
 - Multi-session chat history
 - Privacy-preserving peer insights
+- Multi-language support (English / 简体中文)
 """
 
 import streamlit as st
@@ -21,6 +22,10 @@ from layer4_decoy_factory import generate_decoys
 from decoy_worker import DecoyWorker, get_or_create_worker, stop_worker, get_worker_status
 import database_manager as db
 import auth_ui
+from i18n import (
+    t, init_language, get_current_language, render_language_switcher,
+    get_app_name, inject_font_css, SUPPORTED_LANGUAGES
+)
 import numpy as np
 import threading
 import uuid
@@ -46,12 +51,18 @@ if not auth_ui.is_logged_in():
 # ===================================================================
 # PAGE CONFIG (Only runs if logged in)
 # ===================================================================
+# Initialize language before page config
+init_language()
+
 st.set_page_config(
-    page_title="Confuser - Privacy-First Chat",
+    page_title=f"{get_app_name()} - {t('app.tagline')}",
     page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Inject font CSS for proper character rendering
+inject_font_css()
 
 # Toggle for sync vs async decoy generation
 # Set to False to use new background worker architecture
@@ -779,23 +790,28 @@ def start_new_chat():
 # SIDEBAR
 # ===================================================================
 with st.sidebar:
-    st.title("🛡️ Confuser Chat")
-    
+    st.title(f"🛡️ {get_app_name()}")
+
+    # --- Language Switcher ---
+    render_language_switcher(position='sidebar')
+
+    st.divider()
+
     # --- User Info & Logout ---
     auth_ui.render_user_info()
     auth_ui.render_logout_button()
-    
+
     st.divider()
-    
+
     # --- New Chat Button ---
-    if st.button("➕ New Chat", use_container_width=True, type="primary"):
+    if st.button(f"➕ {t('chat.new_chat')}", use_container_width=True, type="primary"):
         start_new_chat()
         st.rerun()
-    
+
     st.divider()
-    
+
     # --- Chat History ---
-    st.subheader("📜 Chat History")
+    st.subheader(f"📜 {t('chat.chat_history')}")
     
     sessions = db.get_all_sessions(limit=20)
     
@@ -818,29 +834,29 @@ with st.sidebar:
                         start_new_chat()
                     st.rerun()
     else:
-        st.caption("No chat history yet. Start a new conversation!")
-    
+        st.caption(t('chat.no_messages'))
+
     st.divider()
-    
+
     # --- Settings ---
-    with st.expander("⚙️ Settings", expanded=False):
+    with st.expander(f"⚙️ {t('nav.settings')}", expanded=False):
         api_key_input = st.text_input(
-            "DeepSeek API Key",
+            t('sidebar.api_key'),
             type="password",
-            help="Enter your DeepSeek API key.",
+            help=t('sidebar.api_key_placeholder'),
             value=st.session_state.api_key or ""
         )
-        
+
         if api_key_input:
             st.session_state.api_key = api_key_input
             st.success("✅ API Key set!")
         else:
-            st.warning("⚠️ API key required")
-        
+            st.warning(f"⚠️ {t('errors.api_key_required')}")
+
         st.session_state.debug_mode = st.checkbox(
-            "🔍 Debug Mode",
+            f"🔍 {t('sidebar.debug_mode')}",
             value=st.session_state.debug_mode,
-            help="Show debug information"
+            help=t('sidebar.debug_mode')
         )
     
     st.divider()
@@ -910,14 +926,14 @@ inject_insight_bar_css()
 # Render email composer dialog if triggered
 render_email_composer()
 
-st.title("💬 Confuser Chat")
+st.title(f"💬 {get_app_name()}")
 
 if st.session_state.current_session_id:
     st.caption(f"Session: {st.session_state.current_session_id[:8]}...")
 else:
-    st.caption("New conversation - start typing below!")
+    st.caption(t('chat.no_messages'))
 
-st.markdown("*Privacy-preserving chat with cross-user knowledge sharing*")
+st.markdown(f"*{t('app.description')}*")
 
 # Display chat messages
 for msg_idx, message in enumerate(st.session_state.messages):
@@ -957,10 +973,10 @@ for msg_idx, message in enumerate(st.session_state.messages):
 # ===================================================================
 # CHAT INPUT HANDLING
 # ===================================================================
-if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_key):
-    
+if prompt := st.chat_input(t('chat.input_placeholder'), disabled=not st.session_state.api_key):
+
     if not st.session_state.api_key:
-        st.error("⚠️ Please enter your API key in the sidebar first!")
+        st.error(f"⚠️ {t('errors.api_key_required')}")
         st.stop()
     
     # Create session if needed
@@ -1006,7 +1022,7 @@ if prompt := st.chat_input("Ask anything...", disabled=not st.session_state.api_
 
             # Display insights with chat buttons
             if peer_insights:
-                st.markdown("### 🧬 Peer Wisdom Found")
+                st.markdown(f"### 🧬 {t('peer_insights.title')}")
                 for new_insight_idx, insight in enumerate(peer_insights):
                     layer_icon = "🎯" if insight['layer'] == 'Precision' else "💡" if insight['layer'] == 'Resonance' else "🎁"
                     question_preview = insight['question'][:60] + "..." if len(insight['question']) > 60 else insight['question']

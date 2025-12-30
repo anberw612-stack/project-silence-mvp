@@ -1,0 +1,99 @@
+{
+  "app": {
+    "name": "Confuser",
+    "tagline": "Privacy-First Chat",
+    "description": "Your conversations, protected by intelligent privacy layers"
+  },
+  "nav": {
+    "home": "Home",
+    "settings": "Settings",
+    "logout": "Logout",
+    "language": "Language"
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "confirm_password": "Confirm Password",
+    "login_button": "Sign In",
+    "register_button": "Create Account",
+    "logging_in": "Logging in...",
+    "registering": "Creating account...",
+    "login_success": "Login successful!",
+    "register_success": "Account created successfully!",
+    "login_error": "Login failed. Please check your credentials.",
+    "register_error": "Registration failed. Please try again.",
+    "password_mismatch": "Passwords do not match",
+    "welcome_back": "Welcome back",
+    "create_account": "Create your account",
+    "already_have_account": "Already have an account?",
+    "need_account": "Need an account?"
+  },
+  "chat": {
+    "input_placeholder": "Ask anything...",
+    "thinking": "Thinking...",
+    "send": "Send",
+    "clear_history": "Clear History",
+    "new_chat": "New Chat",
+    "chat_history": "Chat History",
+    "no_messages": "No messages yet. Start a conversation!"
+  },
+  "sidebar": {
+    "api_key": "API Key",
+    "api_key_placeholder": "Enter your DeepSeek API key",
+    "debug_mode": "Debug Mode",
+    "user_info": "User Info",
+    "logged_in_as": "Logged in as"
+  },
+  "peer_insights": {
+    "title": "Peer Wisdom Found",
+    "no_insights": "No peer insights found for this query",
+    "similarity": "Similarity",
+    "layer_precision": "Precision",
+    "layer_resonance": "Resonance",
+    "layer_discovery": "Discovery",
+    "view_more": "View More",
+    "anonymous_peer": "Anonymous Peer",
+    "ai_response": "AI Response"
+  },
+  "email_composer": {
+    "title": "Send Message to Peer",
+    "context": "Replying to",
+    "your_message": "Your Message",
+    "message_placeholder": "Write your message here...",
+    "send": "Send Message",
+    "cancel": "Cancel",
+    "sending": "Sending...",
+    "sent_success": "Message sent successfully!",
+    "sent_error": "Failed to send message. Please try again."
+  },
+  "privacy": {
+    "protected": "Protected",
+    "processing": "Processing through privacy layers...",
+    "layer0": "Privacy Router",
+    "layer1": "Semantic Matching",
+    "layer2": "Privacy Perturbation",
+    "layer3": "Consistency Check",
+    "layer4": "Decoy Generation"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "Network error. Please check your connection.",
+    "api_key_required": "API key is required",
+    "session_expired": "Your session has expired. Please log in again."
+  },
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "yes": "Yes",
+    "no": "No"
+  }
+}

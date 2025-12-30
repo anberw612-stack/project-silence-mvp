@@ -5,3 +5,4 @@ tqdm
 openai
 streamlit
 supabase
+streamlit-js-eval

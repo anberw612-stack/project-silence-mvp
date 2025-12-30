@@ -3,10 +3,12 @@ Authentication UI Module
 
 Handles user authentication (Login/Register) using Supabase Auth.
 Provides login/register forms and session management.
+With multi-language support (English / 简体中文).
 """
 
 import streamlit as st
 from database_manager import get_supabase_client, create_or_get_profile
+from i18n import t, init_language, get_app_name, inject_font_css, render_language_switcher
 
 
 def init_auth_state():
@@ -155,37 +157,48 @@ def render_auth_page():
     Render the login/register page.
     This should be called when the user is NOT logged in.
     """
+    # Initialize language for auth page
+    init_language()
+
     st.set_page_config(
-        page_title="Confuser - Login",
+        page_title=f"{get_app_name()} - {t('auth.login')}",
         page_icon="🛡️",
         layout="centered"
     )
-    
-    st.title("🛡️ Confuser")
-    st.markdown("*Privacy-preserving chat with cross-user knowledge sharing*")
-    
+
+    # Inject font CSS for proper character rendering
+    inject_font_css()
+
+    # Language switcher at top
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col3:
+        render_language_switcher(position='sidebar')
+
+    st.title(f"🛡️ {get_app_name()}")
+    st.markdown(f"*{t('app.description')}*")
+
     st.divider()
-    
+
     # Display any auth messages
     if st.session_state.get("auth_error"):
         st.error(st.session_state.auth_error)
         st.session_state.auth_error = None
-    
+
     if st.session_state.get("auth_success"):
         st.success(st.session_state.auth_success)
         st.session_state.auth_success = None
-    
+
     # Tab selection for Login/Register
-    tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
-    
+    tab1, tab2 = st.tabs([f"🔐 {t('auth.login')}", f"📝 {t('auth.register')}"])
+
     with tab1:
         render_login_form()
-    
+
     with tab2:
         render_register_form()
-    
+
     st.divider()
-    st.caption("🛡️ Your conversations are protected with privacy-preserving technology.")
+    st.caption(f"🛡️ {t('app.description')}")
 
 
 def render_login_form():
@@ -193,28 +206,28 @@ def render_login_form():
     Render the login form.
     """
     with st.form("login_form", clear_on_submit=False):
-        st.subheader("Welcome Back")
-        
+        st.subheader(t('auth.welcome_back'))
+
         email = st.text_input(
-            "Email",
+            t('auth.email'),
             placeholder="your@email.com",
             key="login_email"
         )
-        
+
         password = st.text_input(
-            "Password",
+            t('auth.password'),
             type="password",
-            placeholder="Your password",
+            placeholder="••••••••",
             key="login_password"
         )
-        
-        submit = st.form_submit_button("Login", use_container_width=True, type="primary")
-        
+
+        submit = st.form_submit_button(t('auth.login_button'), use_container_width=True, type="primary")
+
         if submit:
             if not email or not password:
-                st.error("Please enter both email and password.")
+                st.error(t('auth.login_error'))
             else:
-                with st.spinner("Logging in..."):
+                with st.spinner(t('auth.logging_in')):
                     if sign_in(email, password):
                         st.rerun()
 
@@ -224,39 +237,39 @@ def render_register_form():
     Render the registration form.
     """
     with st.form("register_form", clear_on_submit=False):
-        st.subheader("Create Account")
-        
+        st.subheader(t('auth.create_account'))
+
         email = st.text_input(
-            "Email",
+            t('auth.email'),
             placeholder="your@email.com",
             key="register_email"
         )
-        
+
         password = st.text_input(
-            "Password",
+            t('auth.password'),
             type="password",
-            placeholder="At least 6 characters",
+            placeholder="••••••••",
             key="register_password"
         )
-        
+
         password_confirm = st.text_input(
-            "Confirm Password",
+            t('auth.confirm_password'),
             type="password",
-            placeholder="Repeat your password",
+            placeholder="••••••••",
             key="register_password_confirm"
         )
-        
-        submit = st.form_submit_button("Create Account", use_container_width=True, type="primary")
-        
+
+        submit = st.form_submit_button(t('auth.register_button'), use_container_width=True, type="primary")
+
         if submit:
             if not email or not password:
-                st.error("Please fill in all fields.")
+                st.error(t('auth.register_error'))
             elif password != password_confirm:
-                st.error("Passwords do not match.")
+                st.error(t('auth.password_mismatch'))
             elif len(password) < 6:
-                st.error("Password must be at least 6 characters.")
+                st.error(t('auth.register_error'))
             else:
-                with st.spinner("Creating account..."):
+                with st.spinner(t('auth.registering')):
                     if sign_up(email, password):
                         st.rerun()
 
@@ -265,7 +278,7 @@ def render_logout_button():
     """
     Render a logout button (to be placed in sidebar).
     """
-    if st.button("🚪 Logout", use_container_width=True):
+    if st.button(f"🚪 {t('nav.logout')}", use_container_width=True):
         sign_out()
         st.rerun()
 
@@ -276,5 +289,5 @@ def render_user_info():
     """
     user = get_current_user()
     if user:
-        st.caption(f"👤 {user.email}")
+        st.caption(f"👤 {t('sidebar.logged_in_as')}: {user.email}")
 

@@ -9,6 +9,7 @@ With multi-language support (English / 简体中文).
 import streamlit as st
 from database_manager import get_supabase_client, create_or_get_profile
 from i18n import t, init_language, get_app_name, inject_font_css, render_language_switcher
+import icons
 
 
 def init_auth_state():
@@ -174,7 +175,28 @@ def render_auth_page():
     with col2:
         render_language_switcher(position='auth', key_prefix='auth_')
 
-    st.title(f"🛡️ {get_app_name()}")
+    # Elegant brand header with SVG icon
+    st.markdown(f'''
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
+            <div style="
+                width:48px;height:48px;
+                background:linear-gradient(135deg, rgba(20,184,166,0.15) 0%, rgba(20,184,166,0.05) 100%);
+                border:1px solid rgba(20,184,166,0.25);
+                border-radius:12px;
+                display:flex;align-items:center;justify-content:center;
+            ">{icons.shield(size=28, color='#14B8A6')}</div>
+            <h1 style="
+                font-family:'Playfair Display',Georgia,serif;
+                font-size:2.5rem;
+                font-weight:600;
+                margin:0;
+                background:linear-gradient(135deg,#F4F4F5 0%,#2DD4BF 50%,#F4F4F5 100%);
+                -webkit-background-clip:text;
+                -webkit-text-fill-color:transparent;
+                background-clip:text;
+            ">{get_app_name()}</h1>
+        </div>
+    ''', unsafe_allow_html=True)
     st.markdown(f"*{t('app.description')}*")
 
     st.divider()
@@ -188,8 +210,8 @@ def render_auth_page():
         st.success(st.session_state.auth_success)
         st.session_state.auth_success = None
 
-    # Tab selection for Login/Register
-    tab1, tab2 = st.tabs([f"🔐 {t('auth.login')}", f"📝 {t('auth.register')}"])
+    # Tab selection for Login/Register - clean text without emojis
+    tab1, tab2 = st.tabs([t('auth.login'), t('auth.register')])
 
     with tab1:
         render_login_form()
@@ -198,7 +220,12 @@ def render_auth_page():
         render_register_form()
 
     st.divider()
-    st.caption(f"🛡️ {t('app.description')}")
+    st.markdown(f'''
+        <div style="display:flex;align-items:center;gap:8px;color:#71717A;font-size:0.85rem;">
+            {icons.shield(size=14, color='#71717A')}
+            <span>{t('app.description')}</span>
+        </div>
+    ''', unsafe_allow_html=True)
 
 
 def render_login_form():
@@ -278,7 +305,17 @@ def render_logout_button():
     """
     Render a logout button (to be placed in sidebar).
     """
-    if st.button(f"🚪 {t('nav.logout')}", use_container_width=True):
+    # Elegant logout with SVG icon
+    st.markdown(f'''
+        <style>
+            div[data-testid="stButton"] > button[kind="secondary"] {{
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+            }}
+        </style>
+    ''', unsafe_allow_html=True)
+    if st.button(t('nav.logout'), use_container_width=True):
         sign_out()
         st.rerun()
 
@@ -289,5 +326,10 @@ def render_user_info():
     """
     user = get_current_user()
     if user:
-        st.caption(f"👤 {t('sidebar.logged_in_as')}: {user.email}")
+        st.markdown(f'''
+            <div style="display:flex;align-items:center;gap:8px;color:#A1A1AA;font-size:0.85rem;">
+                {icons.user(size=14, color='#A1A1AA')}
+                <span>{t('sidebar.logged_in_as')}: {user.email}</span>
+            </div>
+        ''', unsafe_allow_html=True)
 

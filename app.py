@@ -26,6 +26,7 @@ from i18n import (
     t, init_language, get_current_language, render_language_switcher,
     get_app_name, inject_font_css, SUPPORTED_LANGUAGES
 )
+import icons
 import numpy as np
 import threading
 import uuid
@@ -550,6 +551,16 @@ def inject_insight_bar_css():
     st.markdown(css, unsafe_allow_html=True)
 
 
+def get_layer_indicator(layer: str) -> tuple:
+    """Get icon and color for insight layer."""
+    if layer == 'Precision':
+        return icons.target(size=16, color='#14B8A6'), '#14B8A6', 'Precision Match'
+    elif layer == 'Resonance':
+        return icons.lightbulb(size=16, color='#F59E0B'), '#F59E0B', 'Related Insight'
+    else:
+        return icons.gift(size=16, color='#A855F7'), '#A855F7', 'Discovery'
+
+
 def render_insight_with_chat_button(insight: dict, index: int):
     """
     Render an insight bar with the '...' chat button.
@@ -558,15 +569,21 @@ def render_insight_with_chat_button(insight: dict, index: int):
         insight: Dict with question, response, layer, score
         index: Unique index for this insight (for button keys)
     """
-    layer_icon = "🎯" if insight['layer'] == 'Precision' else "💡" if insight['layer'] == 'Resonance' else "🎁"
+    layer_icon, layer_color, layer_label = get_layer_indicator(insight['layer'])
     question_preview = insight['question'][:60] + "..." if len(insight['question']) > 60 else insight['question']
 
     # Create columns for expander header and menu button
     col1, col2 = st.columns([0.95, 0.05])
 
     with col1:
-        with st.expander(f"{layer_icon} Someone asked: {question_preview}", expanded=False):
-            st.caption(f"Layer: {insight['layer']} ({insight['score']:.0%})")
+        with st.expander(f"Someone asked: {question_preview}", expanded=False):
+            st.markdown(f'''
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                    {layer_icon}
+                    <span style="font-size:0.75rem;color:{layer_color};font-weight:500;">{layer_label}</span>
+                    <span style="font-size:0.7rem;color:#71717A;">({insight['score']:.0%})</span>
+                </div>
+            ''', unsafe_allow_html=True)
             st.markdown(f"**AI Answer:** {insight['response']}")
 
     with col2:
@@ -577,7 +594,7 @@ def render_insight_with_chat_button(insight: dict, index: int):
         <div style="margin-top: 8px;">
             <button class="insight-menu-btn" onclick="window.parent.postMessage({{type: 'openComposer', index: {index}, question: '{escaped_question}'}}, '*')">
                 ⋯
-                <span class="tooltip">💬 Chat with them</span>
+                <span class="tooltip">Message them</span>
             </button>
         </div>
         """
@@ -595,7 +612,7 @@ def render_email_composer():
         return
 
     # Use st.dialog for the email composer (Streamlit 1.33+)
-    @st.dialog("💬 Message Anonymous Peer", width="large")
+    @st.dialog("Message Anonymous Peer", width="large")
     def email_dialog():
         # Context preview - shows what question this is about
         if st.session_state.email_insight_context:
@@ -629,7 +646,7 @@ def render_email_composer():
 
         # One-way communication notice
         st.info(
-            "💡 **Note:** This is a one-way anonymous notification. "
+            "**Note:** This is a one-way anonymous notification. "
             "If you wish the recipient to contact you back, please leave a secure contact method "
             "(e.g., WeChat ID, Telegram, or a temporary email) in your message."
         )
@@ -792,7 +809,23 @@ def start_new_chat():
 # SIDEBAR
 # ===================================================================
 with st.sidebar:
-    st.title(f"🛡️ {get_app_name()}")
+    # Brand logo with elegant SVG
+    st.markdown(f'''
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+            <div style="
+                width:36px;height:36px;
+                background:linear-gradient(135deg, rgba(20,184,166,0.2) 0%, rgba(20,184,166,0.05) 100%);
+                border:1px solid rgba(20,184,166,0.3);
+                border-radius:10px;
+                display:flex;align-items:center;justify-content:center;
+            ">{icons.shield(size=20, color='#14B8A6')}</div>
+            <span style="font-family:'Playfair Display',Georgia,serif;font-size:1.5rem;font-weight:600;
+                background:linear-gradient(135deg,#F4F4F5 0%,#2DD4BF 100%);
+                -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
+                {get_app_name()}
+            </span>
+        </div>
+    ''', unsafe_allow_html=True)
 
     # --- Language Switcher ---
     render_language_switcher(position='sidebar')
@@ -806,31 +839,54 @@ with st.sidebar:
     st.divider()
 
     # --- New Chat Button ---
-    if st.button(f"➕ {t('chat.new_chat')}", use_container_width=True, type="primary"):
+    st.markdown(f'''
+        <style>
+            div[data-testid="stButton"] button[kind="primary"] {{
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 8px !important;
+            }}
+        </style>
+    ''', unsafe_allow_html=True)
+    if st.button(f"{t('chat.new_chat')}", use_container_width=True, type="primary", key="new_chat_btn"):
         start_new_chat()
         st.rerun()
 
     st.divider()
 
     # --- Chat History ---
-    st.subheader(f"📜 {t('chat.chat_history')}")
+    st.markdown(f'''
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            {icons.history(size=18, color='#A1A1AA')}
+            <span style="font-size:0.9rem;font-weight:500;color:#A1A1AA;text-transform:uppercase;letter-spacing:0.05em;">
+                {t('chat.chat_history')}
+            </span>
+        </div>
+    ''', unsafe_allow_html=True)
     
     sessions = db.get_all_sessions(limit=20)
     
     if sessions:
         for session_id, title, created_at in sessions:
             is_current = session_id == st.session_state.current_session_id
-            
+
             col1, col2 = st.columns([5, 1])
-            
+
             with col1:
                 display_title = title[:25] + "..." if len(title) > 25 else title
-                if st.button(f"{'▶ ' if is_current else ''}{display_title}", key=f"session_{session_id}", use_container_width=True):
+                # Active indicator with chevron
+                prefix = ""
+                if is_current:
+                    prefix = f'<span style="color:#14B8A6;margin-right:4px;">›</span>'
+
+                if st.button(f"{display_title}", key=f"session_{session_id}", use_container_width=True):
                     load_session(session_id)
                     st.rerun()
-            
+
             with col2:
-                if st.button("🗑️", key=f"delete_{session_id}", help="Delete this chat"):
+                # Elegant trash icon button
+                if st.button("×", key=f"delete_{session_id}", help="Delete this chat"):
                     db.delete_session(session_id)
                     if session_id == st.session_state.current_session_id:
                         start_new_chat()
@@ -841,32 +897,62 @@ with st.sidebar:
     st.divider()
 
     # --- Settings ---
-    with st.expander(f"⚙️ {t('nav.settings')}", expanded=False):
+    st.markdown(f'''
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;">
+            {icons.settings(size=16, color='#71717A')}
+            <span style="font-size:0.85rem;color:#A1A1AA;">{t('nav.settings')}</span>
+        </div>
+    ''', unsafe_allow_html=True)
+
+    with st.expander("", expanded=False):
+        st.markdown(f'''
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                {icons.key(size=16, color='#14B8A6')}
+                <span style="font-size:0.8rem;color:#A1A1AA;">API Configuration</span>
+            </div>
+        ''', unsafe_allow_html=True)
+
         api_key_input = st.text_input(
             t('sidebar.api_key'),
             type="password",
             help=t('sidebar.api_key_placeholder'),
-            value=st.session_state.api_key or ""
+            value=st.session_state.api_key or "",
+            label_visibility="collapsed"
         )
 
         if api_key_input:
             st.session_state.api_key = api_key_input
-            st.success("✅ API Key set!")
+            st.markdown(f'''
+                <div style="display:flex;align-items:center;gap:6px;color:#14B8A6;font-size:0.8rem;">
+                    {icons.check(size=14, color='#14B8A6')}
+                    <span>API Key configured</span>
+                </div>
+            ''', unsafe_allow_html=True)
         else:
-            st.warning(f"⚠️ {t('errors.api_key_required')}")
+            st.markdown(f'''
+                <div style="display:flex;align-items:center;gap:6px;color:#F59E0B;font-size:0.8rem;">
+                    {icons.alert_triangle(size=14, color='#F59E0B')}
+                    <span>{t('errors.api_key_required')}</span>
+                </div>
+            ''', unsafe_allow_html=True)
 
         st.session_state.debug_mode = st.checkbox(
-            f"🔍 {t('sidebar.debug_mode')}",
+            f"Debug Mode",
             value=st.session_state.debug_mode,
             help=t('sidebar.debug_mode')
         )
-    
+
     st.divider()
 
     # --- Background Worker Status ---
     worker = st.session_state.get("decoy_worker")
     if worker and worker.is_running():
-        st.subheader("🔄 Decoy Generation")
+        st.markdown(f'''
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                {icons.loader(size=18, color='#14B8A6')}
+                <span style="font-size:0.9rem;font-weight:500;color:#E4E4E7;">Generating Decoys</span>
+            </div>
+        ''', unsafe_allow_html=True)
         status = worker.get_status()
 
         # Progress indicator
@@ -874,26 +960,28 @@ with st.sidebar:
         target_decoys = 3  # Default target
         progress = min(decoys_generated / target_decoys, 1.0) if target_decoys > 0 else 0
 
-        st.progress(progress, text=f"Generated {decoys_generated}/{target_decoys} decoys")
+        st.progress(progress, text=f"{decoys_generated}/{target_decoys} decoys")
 
         # Status text
         worker_status = status.get("status", "unknown")
         if worker_status == "running":
-            st.caption("⏳ Background generation in progress...")
-            # Show a refresh button and hint about auto-refresh
-            if st.button("🔄 Refresh Status", use_container_width=True, key="refresh_worker_status"):
+            st.caption("Processing in background...")
+            if st.button("Refresh", use_container_width=True, key="refresh_worker_status"):
                 st.rerun()
-            st.caption("💡 Click refresh or switch tabs to check progress")
         elif worker_status == "completed":
-            st.caption("✅ Generation complete!")
+            st.markdown(f'''
+                <div style="display:flex;align-items:center;gap:6px;color:#14B8A6;font-size:0.8rem;">
+                    {icons.check_circle(size=14, color='#14B8A6')}
+                    <span>Complete</span>
+                </div>
+            ''', unsafe_allow_html=True)
         elif worker_status == "failed":
             error_msg = status.get("error_message", "Unknown error")
-            st.caption(f"❌ Failed: {error_msg}")
+            st.caption(f"Failed: {error_msg[:30]}...")
 
         # Stop button
-        if st.button("🛑 Stop Generation", use_container_width=True):
+        if st.button("Stop", use_container_width=True):
             worker.stop()
-            st.toast("Stopped background generation", icon="🛑")
             st.rerun()
 
         st.divider()
@@ -903,15 +991,32 @@ with st.sidebar:
         worker_status = status.get("status", "idle")
         if worker_status == "completed":
             decoys_generated = status.get("decoys_generated", 0)
-            st.success(f"✅ Last run: {decoys_generated} decoys generated")
+            st.markdown(f'''
+                <div style="display:flex;align-items:center;gap:6px;color:#14B8A6;font-size:0.8rem;margin-bottom:8px;">
+                    {icons.check_circle(size=14, color='#14B8A6')}
+                    <span>{decoys_generated} decoys generated</span>
+                </div>
+            ''', unsafe_allow_html=True)
             st.divider()
         elif worker_status == "failed":
             error_msg = status.get("error_message", "Unknown error")
-            st.error(f"❌ Last run failed: {error_msg[:50]}...")
+            st.markdown(f'''
+                <div style="display:flex;align-items:center;gap:6px;color:#EF4444;font-size:0.8rem;margin-bottom:8px;">
+                    {icons.x_circle(size=14, color='#EF4444')}
+                    <span>Failed: {error_msg[:30]}...</span>
+                </div>
+            ''', unsafe_allow_html=True)
             st.divider()
 
     # --- Database Stats ---
-    with st.expander("📊 Stats", expanded=False):
+    st.markdown(f'''
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            {icons.bar_chart(size=16, color='#71717A')}
+            <span style="font-size:0.85rem;color:#A1A1AA;">Statistics</span>
+        </div>
+    ''', unsafe_allow_html=True)
+
+    with st.expander("", expanded=False):
         conv_count = db.get_conversation_count()
         session_count = len(db.get_all_sessions(limit=100))
         st.metric("Total Decoys", conv_count)
@@ -928,7 +1033,36 @@ inject_insight_bar_css()
 # Render email composer dialog if triggered
 render_email_composer()
 
-st.title(f"💬 {get_app_name()}")
+# Main title with elegant typography
+st.markdown(f'''
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
+        <div style="
+            width:48px;height:48px;
+            background:linear-gradient(135deg, rgba(20,184,166,0.15) 0%, rgba(20,184,166,0.05) 100%);
+            border:1px solid rgba(20,184,166,0.25);
+            border-radius:12px;
+            display:flex;align-items:center;justify-content:center;
+        ">{icons.message_square(size=24, color='#14B8A6')}</div>
+        <h1 style="
+            font-family:'Playfair Display',Georgia,serif;
+            font-size:2.25rem;
+            font-weight:600;
+            margin:0;
+            background:linear-gradient(135deg,#F4F4F5 0%,#2DD4BF 50%,#F4F4F5 100%);
+            -webkit-background-clip:text;
+            -webkit-text-fill-color:transparent;
+            background-clip:text;
+            background-size:200% auto;
+            animation:shimmer 4s ease-in-out infinite;
+        ">{get_app_name()}</h1>
+    </div>
+    <style>
+        @keyframes shimmer {{
+            0%, 100% {{ background-position: 0% center; }}
+            50% {{ background-position: 200% center; }}
+        }}
+    </style>
+''', unsafe_allow_html=True)
 
 if st.session_state.current_session_id:
     st.caption(f"Session: {st.session_state.current_session_id[:8]}...")
@@ -946,7 +1080,7 @@ for msg_idx, message in enumerate(st.session_state.messages):
             insights = message["peer_insights"]
 
             for insight_idx, insight in enumerate(insights):
-                layer_icon = "🎯" if insight['layer'] == 'Precision' else "💡" if insight['layer'] == 'Resonance' else "🎁"
+                layer_icon, layer_color, layer_label = get_layer_indicator(insight['layer'])
                 question_preview = insight['question'][:60] + "..." if len(insight['question']) > 60 else insight['question']
 
                 # Create container for insight + chat button
@@ -955,14 +1089,20 @@ for msg_idx, message in enumerate(st.session_state.messages):
                     col1, col2 = st.columns([0.92, 0.08])
 
                     with col1:
-                        with st.expander(f"{layer_icon} Someone asked: {question_preview}", expanded=False):
-                            st.caption(f"Layer: {insight['layer']} ({insight['score']:.0%})")
+                        with st.expander(f"Someone asked: {question_preview}", expanded=False):
+                            st.markdown(f'''
+                                <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                                    {layer_icon}
+                                    <span style="font-size:0.75rem;color:{layer_color};font-weight:500;">{layer_label}</span>
+                                    <span style="font-size:0.7rem;color:#71717A;">({insight['score']:.0%})</span>
+                                </div>
+                            ''', unsafe_allow_html=True)
                             st.markdown(f"**AI Answer:** {insight['response']}")
 
                     with col2:
                         # "..." button with tooltip using native Streamlit
                         unique_key = f"chat_btn_hist_{msg_idx}_{insight_idx}"
-                        if st.button("⋯", key=unique_key, help="💬 Chat with them"):
+                        if st.button("×", key=unique_key, help="Message them"):
                             # Look up the owner's email from the decoy question
                             owner_email = db.get_decoy_owner_email(insight['question'])
                             st.session_state.show_email_composer = True
@@ -1024,9 +1164,16 @@ if prompt := st.chat_input(t('chat.input_placeholder'), disabled=not st.session_
 
             # Display insights with chat buttons
             if peer_insights:
-                st.markdown(f"### 🧬 {t('peer_insights.title')}")
+                st.markdown(f'''
+                    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 12px 0;">
+                        {icons.sparkles(size=20, color='#14B8A6')}
+                        <span style="font-family:'Playfair Display',Georgia,serif;font-size:1.25rem;font-weight:500;color:#E4E4E7;">
+                            {t('peer_insights.title')}
+                        </span>
+                    </div>
+                ''', unsafe_allow_html=True)
                 for new_insight_idx, insight in enumerate(peer_insights):
-                    layer_icon = "🎯" if insight['layer'] == 'Precision' else "💡" if insight['layer'] == 'Resonance' else "🎁"
+                    layer_icon, layer_color, layer_label = get_layer_indicator(insight['layer'])
                     question_preview = insight['question'][:60] + "..." if len(insight['question']) > 60 else insight['question']
 
                     # Create container for insight + chat button
@@ -1035,14 +1182,20 @@ if prompt := st.chat_input(t('chat.input_placeholder'), disabled=not st.session_
                         col1, col2 = st.columns([0.92, 0.08])
 
                         with col1:
-                            with st.expander(f"{layer_icon} Someone asked: {question_preview}", expanded=False):
-                                st.caption(f"Layer: {insight['layer']} ({insight['score']:.0%})")
+                            with st.expander(f"Someone asked: {question_preview}", expanded=False):
+                                st.markdown(f'''
+                                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+                                        {layer_icon}
+                                        <span style="font-size:0.75rem;color:{layer_color};font-weight:500;">{layer_label}</span>
+                                        <span style="font-size:0.7rem;color:#71717A;">({insight['score']:.0%})</span>
+                                    </div>
+                                ''', unsafe_allow_html=True)
                                 st.markdown(f"**AI Answer:** {insight['response']}")
 
                         with col2:
                             # "..." button with tooltip using native Streamlit
                             unique_key = f"chat_btn_new_{new_insight_idx}_{current_source_id[:8]}"
-                            if st.button("⋯", key=unique_key, help="💬 Chat with them"):
+                            if st.button("×", key=unique_key, help="Message them"):
                                 # Look up the owner's email from the decoy question
                                 owner_email = db.get_decoy_owner_email(insight['question'])
                                 st.session_state.show_email_composer = True
@@ -1087,7 +1240,7 @@ if prompt := st.chat_input(t('chat.input_placeholder'), disabled=not st.session_
 
                     if SYNC_DECOY_GENERATION:
                         # SYNCHRONOUS MODE: For debugging - blocks UI but guarantees saves
-                        st.toast("🛡️ Generating privacy decoys...", icon="🔄")
+                        st.toast("Generating privacy decoys...", icon="info")
                         try:
                             print(f"🔄 [SYNC] Starting decoy generation for source_id: {current_source_id[:8]}...")
                             print(f"🔄 [SYNC] Owner user_id: {current_user_id[:8] if current_user_id else 'None'}...")
@@ -1125,9 +1278,14 @@ if prompt := st.chat_input(t('chat.input_placeholder'), disabled=not st.session_
                         st.session_state.worker_task_id = task_id
                         print(f"🚀 [APP] Background worker started (task_id: {task_id[:8]}...)")
 
-                        st.toast("🛡️ Privacy decoys generating in background...", icon="🔄")
+                        st.toast("Privacy decoys generating in background...", icon="info")
 
-                    st.caption("🛡️ Privacy protection active for this conversation.")
+                    st.markdown(f'''
+                        <div style="display:flex;align-items:center;gap:6px;color:#71717A;font-size:0.85rem;">
+                            {icons.shield_check(size=14, color='#14B8A6')}
+                            <span>Privacy protection active for this conversation.</span>
+                        </div>
+                    ''', unsafe_allow_html=True)
                 
             except Exception as e:
                 response = f"❌ Error: {str(e)}"
@@ -1148,5 +1306,12 @@ if prompt := st.chat_input(t('chat.input_placeholder'), disabled=not st.session_
 # FOOTER
 # ===================================================================
 st.divider()
-st.caption("🛡️ Confuser MVP - Privacy-preserving AI chat with cross-user knowledge sharing")
-st.caption("Powered by DeepSeek AI • Supabase Auth • Layer 1: Semantic Matching • Layer 2: Privacy Perturbation")
+st.markdown(f'''
+    <div style="display:flex;align-items:center;gap:8px;color:#71717A;font-size:0.85rem;margin-bottom:4px;">
+        {icons.shield(size=14, color='#71717A')}
+        <span>Confuser MVP - Privacy-preserving AI chat with cross-user knowledge sharing</span>
+    </div>
+    <div style="color:#52525B;font-size:0.75rem;">
+        Powered by DeepSeek AI • Supabase Auth • Layer 1: Semantic Matching • Layer 2: Privacy Perturbation
+    </div>
+''', unsafe_allow_html=True)

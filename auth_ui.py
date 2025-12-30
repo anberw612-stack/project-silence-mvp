@@ -175,7 +175,7 @@ def render_auth_page():
     with col2:
         render_language_switcher(position='auth', key_prefix='auth_')
 
-    # Elegant brand header with SVG icon
+    # Elegant brand header with SVG icon - properly centered
     st.markdown(f'''
         <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
             <div style="
@@ -184,7 +184,7 @@ def render_auth_page():
                 border:1px solid rgba(20,184,166,0.25);
                 border-radius:12px;
                 display:flex;align-items:center;justify-content:center;
-            ">{icons.shield(size=28, color='#14B8A6')}</div>
+            ">{icons.shield(size=28, color='#14B8A6', no_margin=True)}</div>
             <h1 style="
                 font-family:'Playfair Display',Georgia,serif;
                 font-size:2.5rem;

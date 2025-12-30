@@ -22,7 +22,7 @@ ICON_STYLE = {
 
 
 def _svg(paths: str, size: int = None, color: str = None, stroke_width: float = None,
-         viewbox: str = "0 0 24 24", filled: bool = False) -> str:
+         viewbox: str = "0 0 24 24", filled: bool = False, no_margin: bool = False) -> str:
     """
     Generate an inline SVG icon.
 
@@ -33,6 +33,7 @@ def _svg(paths: str, size: int = None, color: str = None, stroke_width: float = 
         stroke_width: Stroke width
         viewbox: SVG viewBox
         filled: Whether to use fill instead of stroke
+        no_margin: If True, removes default right margin (for centered icons)
     """
     s = size or ICON_STYLE['size']
     c = color or ICON_STYLE['color']
@@ -40,19 +41,20 @@ def _svg(paths: str, size: int = None, color: str = None, stroke_width: float = 
 
     fill_attr = f'fill="{c}"' if filled else 'fill="none"'
     stroke_attr = '' if filled else f'stroke="{c}" stroke-width="{sw}" stroke-linecap="round" stroke-linejoin="round"'
+    margin = '' if no_margin else 'margin-right:8px;'
 
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{s}" height="{s}" viewBox="{viewbox}" {fill_attr} {stroke_attr} style="display:inline-block;vertical-align:middle;margin-right:8px;">{paths}</svg>'''
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{s}" height="{s}" viewBox="{viewbox}" {fill_attr} {stroke_attr} style="display:inline-block;vertical-align:middle;flex-shrink:0;{margin}">{paths}</svg>'''
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # BRAND / MAIN ICONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def shield(size: int = 24, color: str = None) -> str:
+def shield(size: int = 24, color: str = None, no_margin: bool = False) -> str:
     """Shield icon - brand symbol for protection/security"""
     return _svg(
         '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
-        size=size, color=color or ICON_STYLE['color']
+        size=size, color=color or ICON_STYLE['color'], no_margin=no_margin
     )
 
 
@@ -78,11 +80,11 @@ def lock(size: int = 20, color: str = None) -> str:
 # NAVIGATION / UI ICONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def message_square(size: int = 20, color: str = None) -> str:
+def message_square(size: int = 20, color: str = None, no_margin: bool = False) -> str:
     """Chat/message icon"""
     return _svg(
         '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
-        size=size, color=color or ICON_STYLE['color_light']
+        size=size, color=color or ICON_STYLE['color_light'], no_margin=no_margin
     )
 
 
@@ -310,13 +312,22 @@ def chevron_right(size: int = 16, color: str = None) -> str:
     )
 
 
-def more_horizontal(size: int = 20, color: str = None) -> str:
+def more_horizontal(size: int = 20, color: str = None, no_margin: bool = False) -> str:
     """More options (three dots)"""
     return _svg(
         '<circle cx="12" cy="12" r="1"/>'
         '<circle cx="19" cy="12" r="1"/>'
         '<circle cx="5" cy="12" r="1"/>',
-        size=size, color=color or ICON_STYLE['color_muted'], filled=True
+        size=size, color=color or ICON_STYLE['color_muted'], filled=True, no_margin=no_margin
+    )
+
+
+def pin(size: int = 20, color: str = None, no_margin: bool = False) -> str:
+    """Pin/sticky icon"""
+    return _svg(
+        '<path d="M12 17v5"/>'
+        '<path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+        size=size, color=color or ICON_STYLE['color_muted'], no_margin=no_margin
     )
 
 

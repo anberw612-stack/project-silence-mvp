@@ -809,7 +809,7 @@ def start_new_chat():
 # SIDEBAR
 # ===================================================================
 with st.sidebar:
-    # Brand logo with elegant SVG
+    # Brand logo with elegant SVG - properly centered icon
     st.markdown(f'''
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
             <div style="
@@ -818,7 +818,7 @@ with st.sidebar:
                 border:1px solid rgba(20,184,166,0.3);
                 border-radius:10px;
                 display:flex;align-items:center;justify-content:center;
-            ">{icons.shield(size=20, color='#14B8A6')}</div>
+            ">{icons.shield(size=20, color='#14B8A6', no_margin=True)}</div>
             <span style="font-family:'Playfair Display',Georgia,serif;font-size:1.5rem;font-weight:600;
                 background:linear-gradient(135deg,#F4F4F5 0%,#2DD4BF 100%);
                 -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">
@@ -864,51 +864,116 @@ with st.sidebar:
             </span>
         </div>
     ''', unsafe_allow_html=True)
-    
+
+    # CSS for ChatGPT-style hover menu on chat history items
+    st.markdown('''
+        <style>
+        /* Hide menu button by default, show on hover */
+        .chat-history-item {
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            margin: 2px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: transparent;
+        }
+        .chat-history-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .chat-history-item.active {
+            background: rgba(20, 184, 166, 0.1);
+            border-left: 2px solid #14B8A6;
+        }
+        .chat-history-title {
+            flex: 1;
+            font-size: 0.9rem;
+            color: #E4E4E7;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .chat-history-menu-btn {
+            opacity: 0;
+            background: transparent;
+            border: none;
+            padding: 4px 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            color: #A1A1AA;
+        }
+        .chat-history-item:hover .chat-history-menu-btn {
+            opacity: 1;
+        }
+        .chat-history-menu-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #E4E4E7;
+        }
+
+        /* Streamlit button overrides for chat history */
+        [data-testid="stSidebar"] .stPopover button {
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            background: transparent !important;
+            border: none !important;
+            padding: 4px !important;
+            min-width: 32px !important;
+        }
+        [data-testid="stSidebar"] div:hover > .stPopover button {
+            opacity: 1;
+        }
+        [data-testid="stSidebar"] .stPopover button:hover {
+            background: rgba(255, 255, 255, 0.1) !important;
+        }
+        </style>
+    ''', unsafe_allow_html=True)
+
     sessions = db.get_all_sessions(limit=20)
-    
+
     if sessions:
         for session_id, title, created_at in sessions:
             is_current = session_id == st.session_state.current_session_id
+            display_title = title[:28] + "..." if len(title) > 28 else title
 
-            col1, col2 = st.columns([5, 1])
+            # Container for each chat history item
+            col1, col2 = st.columns([0.88, 0.12])
 
             with col1:
-                display_title = title[:25] + "..." if len(title) > 25 else title
-                # Active indicator with chevron
-                prefix = ""
-                if is_current:
-                    prefix = f'<span style="color:#14B8A6;margin-right:4px;">›</span>'
-
-                if st.button(f"{display_title}", key=f"session_{session_id}", use_container_width=True):
+                btn_type = "primary" if is_current else "secondary"
+                if st.button(display_title, key=f"session_{session_id}", use_container_width=True, type=btn_type):
                     load_session(session_id)
                     st.rerun()
 
             with col2:
-                # Elegant trash icon button
-                if st.button("×", key=f"delete_{session_id}", help="Delete this chat"):
-                    db.delete_session(session_id)
-                    if session_id == st.session_state.current_session_id:
-                        start_new_chat()
-                    st.rerun()
+                # Three-dot menu using popover
+                with st.popover("⋯", help="Options"):
+                    st.markdown(f"**{display_title[:20]}...**" if len(title) > 20 else f"**{title}**")
+                    st.divider()
+
+                    # Pin option (placeholder - would need database support)
+                    # if st.button(f"{icons.pin(size=14, no_margin=True)} Pin to top", key=f"pin_{session_id}", use_container_width=True):
+                    #     st.toast("Pin feature coming soon!")
+
+                    # Delete option
+                    if st.button(f"🗑️ Delete", key=f"delete_{session_id}", use_container_width=True, type="secondary"):
+                        db.delete_session(session_id)
+                        if session_id == st.session_state.current_session_id:
+                            start_new_chat()
+                        st.rerun()
     else:
         st.caption(t('chat.no_messages'))
 
     st.divider()
 
     # --- Settings ---
-    st.markdown(f'''
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;">
-            {icons.settings(size=16, color='#71717A')}
-            <span style="font-size:0.85rem;color:#A1A1AA;">{t('nav.settings')}</span>
-        </div>
-    ''', unsafe_allow_html=True)
-
-    with st.expander("", expanded=False):
+    with st.expander(f"⚙️ {t('nav.settings')}", expanded=False):
         st.markdown(f'''
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
                 {icons.key(size=16, color='#14B8A6')}
-                <span style="font-size:0.8rem;color:#A1A1AA;">API Configuration</span>
+                <span style="font-size:0.85rem;color:#E4E4E7;font-weight:500;">API Configuration</span>
             </div>
         ''', unsafe_allow_html=True)
 
@@ -936,8 +1001,10 @@ with st.sidebar:
                 </div>
             ''', unsafe_allow_html=True)
 
+        st.divider()
+
         st.session_state.debug_mode = st.checkbox(
-            f"Debug Mode",
+            f"🔍 Debug Mode",
             value=st.session_state.debug_mode,
             help=t('sidebar.debug_mode')
         )
@@ -1009,18 +1076,17 @@ with st.sidebar:
             st.divider()
 
     # --- Database Stats ---
-    st.markdown(f'''
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-            {icons.bar_chart(size=16, color='#71717A')}
-            <span style="font-size:0.85rem;color:#A1A1AA;">Statistics</span>
-        </div>
-    ''', unsafe_allow_html=True)
-
-    with st.expander("", expanded=False):
+    with st.expander("📊 Statistics", expanded=False):
         conv_count = db.get_conversation_count()
         session_count = len(db.get_all_sessions(limit=100))
-        st.metric("Total Decoys", conv_count)
-        st.metric("Your Chats", session_count)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Total Decoys", conv_count)
+        with col2:
+            st.metric("Your Chats", session_count)
+
+        st.caption("Decoys are privacy-preserving variants generated from your conversations.")
 
 
 # ===================================================================
@@ -1033,7 +1099,7 @@ inject_insight_bar_css()
 # Render email composer dialog if triggered
 render_email_composer()
 
-# Main title with elegant typography
+# Main title with elegant typography - properly centered icon
 st.markdown(f'''
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
         <div style="
@@ -1042,7 +1108,7 @@ st.markdown(f'''
             border:1px solid rgba(20,184,166,0.25);
             border-radius:12px;
             display:flex;align-items:center;justify-content:center;
-        ">{icons.message_square(size=24, color='#14B8A6')}</div>
+        ">{icons.message_square(size=24, color='#14B8A6', no_margin=True)}</div>
         <h1 style="
             font-family:'Playfair Display',Georgia,serif;
             font-size:2.25rem;

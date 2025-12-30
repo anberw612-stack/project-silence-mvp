@@ -571,9 +571,11 @@ def render_insight_with_chat_button(insight: dict, index: int):
 
     with col2:
         # Custom HTML button with tooltip
+        # Escape quotes for JavaScript - must be done outside f-string
+        escaped_question = insight['question'][:100].replace("'", "\\'")
         button_html = f"""
         <div style="margin-top: 8px;">
-            <button class="insight-menu-btn" onclick="window.parent.postMessage({{type: 'openComposer', index: {index}, question: '{insight['question'][:100].replace("'", "\\'")}'}}, '*')">
+            <button class="insight-menu-btn" onclick="window.parent.postMessage({{type: 'openComposer', index: {index}, question: '{escaped_question}'}}, '*')">
                 ⋯
                 <span class="tooltip">💬 Chat with them</span>
             </button>

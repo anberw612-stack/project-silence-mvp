@@ -1082,9 +1082,9 @@ with st.sidebar:
 
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Total Decoys", conv_count)
+            st.metric("Decoys", conv_count)
         with col2:
-            st.metric("Your Chats", session_count)
+            st.metric("Chats", session_count)
 
         st.caption("Decoys are privacy-preserving variants generated from your conversations.")
 

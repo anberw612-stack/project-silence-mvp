@@ -1,0 +1,258 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CONFUSER - VAULT THEME GLOBAL STYLES
+   Luxury Fintech & Cyber-Security Aesthetic
+
+   Note: Fonts are loaded via index.html <link> tags for optimal performance
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BASE LAYER - Root variables and base styling
+   ═══════════════════════════════════════════════════════════════════════════════ */
+@layer base {
+  :root {
+    /* Color tokens */
+    --color-obsidian: 11, 12, 16;
+    --color-midnight: 15, 23, 42;
+    --color-teal: 20, 184, 166;
+    --color-gold: 245, 158, 11;
+
+    /* Animation timing */
+    --ease-luxury: cubic-bezier(0.16, 1, 0.3, 1);
+    --duration-slow: 600ms;
+    --duration-medium: 400ms;
+    --duration-fast: 200ms;
+  }
+
+  /* Smooth scrolling with luxury feel */
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-vault-obsidian text-neutral-100 font-sans;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Elegant heading typography */
+  h1, h2, h3 {
+    @apply font-serif font-semibold tracking-tight;
+  }
+
+  h1 {
+    @apply text-5xl md:text-6xl lg:text-7xl;
+  }
+
+  h2 {
+    @apply text-3xl md:text-4xl lg:text-5xl;
+  }
+
+  h3 {
+    @apply text-xl md:text-2xl;
+  }
+
+  /* Body text - clean and readable */
+  p {
+    @apply text-neutral-300 leading-relaxed;
+  }
+
+  /* Selection styling */
+  ::selection {
+    @apply bg-accent-teal/30 text-white;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   COMPONENTS LAYER - Reusable UI components
+   ═══════════════════════════════════════════════════════════════════════════════ */
+@layer components {
+  /* Noise texture overlay - removes cheap digital look */
+  .noise-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+  }
+
+  /* Glassmorphism card base */
+  .glass-card {
+    @apply relative overflow-hidden;
+    @apply bg-white/[0.03] backdrop-blur-md;
+    @apply border border-white/[0.08];
+    @apply rounded-2xl;
+    @apply shadow-glass;
+  }
+
+  .glass-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.05) 0%,
+      transparent 50%,
+      transparent 100%
+    );
+    pointer-events: none;
+  }
+
+  /* Ghost button styling */
+  .btn-ghost {
+    @apply relative inline-flex items-center justify-center;
+    @apply px-8 py-4;
+    @apply text-sm font-medium tracking-wide uppercase;
+    @apply text-neutral-200;
+    @apply border border-white/10;
+    @apply rounded-lg;
+    @apply backdrop-blur-sm bg-white/[0.02];
+    @apply transition-all duration-300;
+    @apply hover:border-accent-teal/50 hover:text-accent-teal-light;
+    @apply hover:shadow-glow-teal-sm;
+    @apply focus:outline-none focus:ring-2 focus:ring-accent-teal/30;
+  }
+
+  /* Primary CTA button */
+  .btn-primary {
+    @apply relative inline-flex items-center justify-center;
+    @apply px-10 py-4;
+    @apply text-sm font-semibold tracking-wide uppercase;
+    @apply text-vault-obsidian;
+    @apply bg-gradient-to-r from-accent-teal to-accent-teal-light;
+    @apply rounded-lg;
+    @apply transition-all duration-300;
+    @apply hover:shadow-glow-teal hover:scale-[1.02];
+    @apply focus:outline-none focus:ring-2 focus:ring-accent-teal/50 focus:ring-offset-2 focus:ring-offset-vault-obsidian;
+  }
+
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.2) 0%,
+      transparent 50%
+    );
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  /* Section container with luxury spacing */
+  .section-container {
+    @apply max-w-7xl mx-auto px-8 md:px-12 lg:px-16;
+    @apply py-24 md:py-32 lg:py-40;
+  }
+
+  /* Subtle border glow effect */
+  .border-glow {
+    @apply relative;
+  }
+
+  .border-glow::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      135deg,
+      rgba(20, 184, 166, 0.3) 0%,
+      transparent 50%,
+      rgba(20, 184, 166, 0.3) 100%
+    );
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+
+  .border-glow:hover::after {
+    opacity: 1;
+  }
+
+  /* Text gradient effect */
+  .text-gradient {
+    @apply bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-neutral-100 via-accent-teal-light to-neutral-100;
+    background-size: 200% auto;
+    animation: text-shimmer 4s ease-in-out infinite;
+  }
+
+  @keyframes text-shimmer {
+    0%, 100% { background-position: 0% center; }
+    50% { background-position: 200% center; }
+  }
+
+  /* Aurora gradient background */
+  .aurora-bg {
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -20%, rgba(20, 184, 166, 0.15) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 80% -10%, rgba(245, 158, 11, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse 70% 50% at 50% 120%, rgba(20, 184, 166, 0.1) 0%, transparent 50%),
+      linear-gradient(180deg, #0B0C10 0%, #0F172A 100%);
+    background-size: 200% 200%;
+    animation: aurora 20s ease infinite;
+  }
+
+  @keyframes aurora {
+    0%, 100% { background-position: 0% 0%; }
+    25% { background-position: 50% 25%; }
+    50% { background-position: 100% 50%; }
+    75% { background-position: 50% 75%; }
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   UTILITIES LAYER - Custom utility classes
+   ═══════════════════════════════════════════════════════════════════════════════ */
+@layer utilities {
+  /* Luxury animation timing */
+  .ease-luxury {
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Stagger animation delays */
+  .delay-100 { animation-delay: 100ms; }
+  .delay-200 { animation-delay: 200ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-400 { animation-delay: 400ms; }
+  .delay-500 { animation-delay: 500ms; }
+
+  /* Opacity utilities for borders */
+  .border-opacity-5 { --tw-border-opacity: 0.05; }
+  .border-opacity-8 { --tw-border-opacity: 0.08; }
+
+  /* Scrollbar styling */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(20, 184, 166, 0.3) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(20, 184, 166, 0.3);
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(20, 184, 166, 0.5);
+  }
+}

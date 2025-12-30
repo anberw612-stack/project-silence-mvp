@@ -1,26 +1,18 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 
 /**
- * The Abyssal Layer (Phase 2: Disintegration & Interaction)
+ * The Abyssal Layer (HOTFIX: Render Debugging)
  * 
- * A visual overlay that creates a deep-sea sediment effect and handles "Shatter, Fall, Evaporate"
- * interactions for query submission.
- * 
- * Visual States:
- * 1. Sediment: Ambient background particles (deep sea oil/sediment).
- * 2. Debris: White/bright particles from "shattered" text input.
- * 3. Splash: Shockwave effect when debris hits the liquid surface.
- * 4. Evaporate: "Boiling" particles released after debris merges.
- * 
- * Mechanics:
- * - pointer-events: none for interaction safety.
- * - Window-level mouse tracking.
- * - Physics: Gravity, Drag, Buoyancy, Spring Forces.
+ * fixes:
+ * - Z-Index raised to 9999 (with pointer-events: none) to ensure visibility above backgrounds.
+ * - DEBUG MODE: Particles forced to Bright RED (#FF0000) and full opacity.
+ * - Added console logs to verify animation loop.
  */
 const AbyssalLayer = forwardRef((props, ref) => {
     const canvasRef = useRef(null);
     const mouseRef = useRef({ x: -1000, y: -1000 });
     const animationRef = useRef(null);
+    const frameCountRef = useRef(0);
 
     // Particle Systems
     const sedimentRef = useRef([]); // Background layer
@@ -39,10 +31,12 @@ const AbyssalLayer = forwardRef((props, ref) => {
         DEBRIS_DRAG: 0.98,
         SPLASH_FORCE: 8.0,
 
-        // Colors
-        COLOR_CYAN: [100, 255, 255],     // High/Energy
-        COLOR_NAVY: [20, 40, 100],       // Deep/Sediment
-        COLOR_WHITE: [255, 255, 255],    // Fresh Debris
+        // Colors (DEBUG MODE: FORCE RED)
+        // Was: COLOR_CYAN: [100, 255, 255]
+        // Was: COLOR_NAVY: [20, 40, 100]
+        COLOR_CYAN: [255, 0, 0],     // RED (High/Energy)
+        COLOR_NAVY: [200, 0, 0],     // DARK RED (Deep/Sediment)
+        COLOR_WHITE: [255, 255, 255],// White remains for debris
 
         // Evaporation
         BOIL_DELAY_MS: 400,
@@ -53,47 +47,37 @@ const AbyssalLayer = forwardRef((props, ref) => {
      * External Interface for "Shatter" Effect
      */
     useImperativeHandle(ref, () => ({
-        /**
-         * Triggers the shatter effect at specific coordinates (usually the input box).
-         * @param {number} x - Center X of the input
-         * @param {number} y - Center Y of the input
-         * @param {number} width - Width of the area to shatter
-         */
         triggerShatter: (x, y, width = 300) => {
+            console.log("💥 [AbyssalLayer] Shatter triggered at", x, y);
             createDebris(x, y, width);
         },
-
-        /**
-         * Triggers the evaporation "boil" effect from the bottom.
-         */
         triggerEvaporation: () => {
+            console.log("💨 [AbyssalLayer] Evaporation triggered");
             createEvaporation();
         }
     }));
 
     // Create debris particles from "shattered" text
     const createDebris = (originX, originY, spreadWidth) => {
-        const particleCount = 60 + Math.random() * 40; // 60-100 particles
-
+        const particleCount = 60 + Math.random() * 40;
         for (let i = 0; i < particleCount; i++) {
             debrisRef.current.push({
                 x: originX + (Math.random() - 0.5) * spreadWidth,
                 y: originY + (Math.random() - 0.5) * 40,
                 vx: (Math.random() - 0.5) * 4,
-                vy: (Math.random() * -3) - 1,   // Initial upward pop
+                vy: (Math.random() * -3) - 1,
                 size: 1.5 + Math.random() * 3,
-                color: [...CONFIG.COLOR_WHITE, 1.0], // Start white opacity 1.0
+                color: [...CONFIG.COLOR_WHITE, 1.0],
                 life: 1.0,
-                state: 'falling' // falling -> splashing -> merging
+                state: 'falling'
             });
         }
     };
 
-    // Create rising bubbles (response simulation)
+    // Create rising bubbles
     const createEvaporation = () => {
         const zoneTop = window.innerHeight * (1 - CONFIG.ZONE_HEIGHT_RATIO);
         const bubbleCount = 40;
-
         for (let i = 0; i < bubbleCount; i++) {
             bubblesRef.current.push({
                 x: Math.random() * window.innerWidth,
@@ -101,7 +85,7 @@ const AbyssalLayer = forwardRef((props, ref) => {
                 vx: (Math.random() - 0.5) * 0.5,
                 vy: -1 - Math.random() * 2,
                 size: 1 + Math.random() * 3,
-                color: [...CONFIG.COLOR_CYAN, 0], // Start invisible
+                color: [...CONFIG.COLOR_CYAN, 0],
                 life: 0,
                 maxLife: 100 + Math.random() * 100
             });
@@ -109,8 +93,12 @@ const AbyssalLayer = forwardRef((props, ref) => {
     };
 
     useEffect(() => {
+        console.log("🌊 [AbyssalLayer] Mounting & Initializing...");
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        if (!canvas) {
+            console.error("❌ [AbyssalLayer] Canvas ref is null!");
+            return;
+        }
 
         const ctx = canvas.getContext('2d');
 
@@ -118,6 +106,7 @@ const AbyssalLayer = forwardRef((props, ref) => {
         const resize = () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            console.log("📏 [AbyssalLayer] Resized to", canvas.width, canvas.height);
         };
 
         // Initialize Sediment (Background)
@@ -125,6 +114,8 @@ const AbyssalLayer = forwardRef((props, ref) => {
             const particles = [];
             const zoneTop = window.innerHeight * (1 - CONFIG.ZONE_HEIGHT_RATIO);
             const zoneHeight = window.innerHeight * CONFIG.ZONE_HEIGHT_RATIO;
+
+            console.log(`🔹 [AbyssalLayer] Init Sediment: 130 particles in zone y=${Math.round(zoneTop)} to ${window.innerHeight}`);
 
             for (let i = 0; i < CONFIG.SEDIMENT_COUNT; i++) {
                 const baseY = zoneTop + Math.random() * zoneHeight;
@@ -137,8 +128,8 @@ const AbyssalLayer = forwardRef((props, ref) => {
                     size: 2 + Math.random() * 4,
                     phase: Math.random() * Math.PI * 2,
                     phaseSpeed: 0.005 + Math.random() * 0.01,
-                    color: [...CONFIG.COLOR_NAVY, 0.4],
-                    targetColor: [...CONFIG.COLOR_NAVY, 0.4],
+                    color: [...CONFIG.COLOR_NAVY, 1.0], // DEBUG: Full opacity 1.0
+                    targetColor: [...CONFIG.COLOR_NAVY, 1.0],
                 });
             }
             sedimentRef.current = particles;
@@ -152,7 +143,6 @@ const AbyssalLayer = forwardRef((props, ref) => {
                 const dx = p.x - x;
                 const dy = p.y - y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-
                 if (dist < radius) {
                     const f = (1 - dist / radius) * force;
                     p.vx += (dx / dist) * f;
@@ -163,6 +153,11 @@ const AbyssalLayer = forwardRef((props, ref) => {
 
         // Animation Loop
         const animate = () => {
+            frameCountRef.current++;
+            if (frameCountRef.current % 300 === 0) {
+                console.log("⏱️ [AbyssalLayer] Animation Loop Running... Frame:", frameCountRef.current);
+            }
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             const zoneTop = canvas.height * (1 - CONFIG.ZONE_HEIGHT_RATIO);
@@ -173,7 +168,7 @@ const AbyssalLayer = forwardRef((props, ref) => {
                 // Buoyancy
                 p.phase += p.phaseSpeed;
                 const targetY = p.baseY + Math.sin(p.phase) * 15;
-                p.vy += (targetY - p.y) * 0.01; // Spring to base
+                p.vy += (targetY - p.y) * 0.01;
 
                 // Mouse Gravity
                 const dx = mouse.x - p.x;
@@ -195,14 +190,6 @@ const AbyssalLayer = forwardRef((props, ref) => {
                 ctx.beginPath();
                 const [r, g, b, a] = p.color;
 
-                // Dynamic color lerp
-                const currentYRatio = (p.y - zoneTop) / (canvas.height - zoneTop); // 0=top, 1=bottom
-                const tc = currentYRatio < 0.2 ? CONFIG.COLOR_CYAN : CONFIG.COLOR_NAVY;
-
-                p.color[0] = lerp(r, tc[0], 0.02);
-                p.color[1] = lerp(g, tc[1], 0.02);
-                p.color[2] = lerp(b, tc[2], 0.02);
-
                 const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 2);
                 gradient.addColorStop(0, `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${a})`);
                 gradient.addColorStop(1, `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},0)`);
@@ -216,59 +203,43 @@ const AbyssalLayer = forwardRef((props, ref) => {
                 if (p.x > canvas.width) p.x = 0;
             });
 
-            // 2. UPDATE DEBRIS (Shattered Text)
+            // 2. UPDATE DEBRIS
             for (let i = debrisRef.current.length - 1; i >= 0; i--) {
                 const p = debrisRef.current[i];
-
-                // Gravity
                 p.vy += CONFIG.DEBRIS_GRAVITY;
                 p.vx *= CONFIG.DEBRIS_DRAG;
                 p.x += p.vx;
                 p.y += p.vy;
 
-                // Collision with Liquid Surface
                 if (p.state === 'falling' && p.y > zoneTop) {
                     p.state = 'merged';
-                    // SPLASH: Push sediment down
                     applyForceToSediment(p.x, p.y, CONFIG.SPLASH_FORCE, 100);
-
-                    // Slow down
                     p.vy *= 0.1;
-
-                    // Trigger color change to blue
                     p.color = [...CONFIG.COLOR_CYAN, 1.0];
                 }
 
-                // Draw Debris
                 ctx.beginPath();
                 const [r, g, b, a] = p.color;
-
-                // Fade out if submerged deep
                 if (p.state === 'merged') {
-                    p.color[3] = lerp(a, 0, 0.05); // Rapid dissolve
+                    p.color[3] = lerp(a, 0, 0.05);
                 }
-
                 ctx.fillStyle = `rgba(${r},${g},${b},${p.color[3]})`;
-                ctx.rect(p.x, p.y, p.size, p.size); // Debris is square/sharp
+                ctx.rect(p.x, p.y, p.size, p.size);
                 ctx.fill();
 
-                // Remove dead debris
                 if (p.color[3] < 0.01 || p.y > canvas.height) {
                     debrisRef.current.splice(i, 1);
                 }
             }
 
-            // 3. UPDATE BUBBLES (Evaporation)
+            // 3. UPDATE BUBBLES
             for (let i = bubblesRef.current.length - 1; i >= 0; i--) {
                 const p = bubblesRef.current[i];
                 p.life++;
-
-                // Rise
-                p.vy -= 0.05; // Accelerate up
+                p.vy -= 0.05;
                 p.y += p.vy;
-                p.x += Math.sin(p.life * 0.1) * 0.5; // Bubble wobble
+                p.x += Math.sin(p.life * 0.1) * 0.5;
 
-                // Fade in then out
                 if (p.life < 20) p.color[3] = lerp(p.color[3], 0.6, 0.1);
                 else if (p.life > p.maxLife - 30) p.color[3] = lerp(p.color[3], 0, 0.1);
 
@@ -284,7 +255,9 @@ const AbyssalLayer = forwardRef((props, ref) => {
         };
 
         // Mouse Listeners
-        const handleMouseMove = (e) => { mouseRef.current = { x: e.clientX, y: e.clientY }; };
+        const handleMouseMove = (e) => {
+            mouseRef.current = { x: e.clientX, y: e.clientY };
+        };
 
         resize();
         initSediment();
@@ -309,8 +282,8 @@ const AbyssalLayer = forwardRef((props, ref) => {
                 width: '100vw',
                 height: '100vh',
                 pointerEvents: 'none',
-                zIndex: 0, // Behind UI
-                background: 'transparent',
+                zIndex: 9999, // FIX: Very high z-index
+                background: 'transparent', // FIX: Ensure transparent background
             }}
             aria-hidden="true"
         />

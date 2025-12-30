@@ -251,18 +251,17 @@ def render_language_switcher(position: str = 'sidebar', key_prefix: str = '') ->
     # Use unique keys based on position
     selector_key = f'{key_prefix}language_selector' if key_prefix else f'{position}_lang_selector'
 
-    # Use radio buttons for non-editable selection
-    selected = st.radio(
+    # Use pills/segmented control for clean non-editable selection
+    selected = st.pills(
         "Language",
         options=['en', 'zh'],
-        format_func=lambda x: "EN" if x == 'en' else "中文",
-        index=0 if current_lang == 'en' else 1,
+        format_func=lambda x: "EN 🇺🇸" if x == 'en' else "中文 🇨🇳",
+        default=current_lang,
         key=selector_key,
-        horizontal=True,
         label_visibility="collapsed"
     )
 
-    if selected != current_lang:
+    if selected and selected != current_lang:
         set_language(selected)
 
 

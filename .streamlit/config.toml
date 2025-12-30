@@ -1,0 +1,14 @@
+[theme]
+# Vault Theme - Luxury Fintech & Cyber-Security Aesthetic
+primaryColor = "#14B8A6"          # Electric Teal - primary accent
+backgroundColor = "#0B0C10"       # Obsidian - main background
+secondaryBackgroundColor = "#0F172A"  # Deep Midnight - cards/sidebar
+textColor = "#E4E4E7"             # Neutral-200 - readable text
+font = "sans serif"
+
+[server]
+headless = true
+enableCORS = false
+
+[browser]
+gatherUsageStats = false

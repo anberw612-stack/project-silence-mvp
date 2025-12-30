@@ -302,7 +302,7 @@ def get_font_family() -> str:
 
 def inject_font_css() -> None:
     """
-    Inject CSS for proper font rendering based on current language.
+    Inject CSS for proper font rendering and the VAULT luxury theme.
     Should be called early in the app initialization.
     """
     font_family = get_font_family()
@@ -327,31 +327,428 @@ def inject_font_css() -> None:
         }
     """ if lang == 'zh' else ""
 
-    css = f"""
-    <style>
-        /* Global font family */
-        html, body, [class*="css"] {{
-            font-family: {font_family};
-        }}
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # VAULT THEME - Luxury Fintech & Cyber-Security Aesthetic
+    # ═══════════════════════════════════════════════════════════════════════════════
+    vault_theme = """
+        /* ═══════════════════════════════════════════════════════════════════════════
+           VAULT COLOR PALETTE
+           ═══════════════════════════════════════════════════════════════════════════ */
+        :root {
+            --vault-obsidian: #0B0C10;
+            --vault-midnight: #0F172A;
+            --vault-charcoal: #1C1C1E;
+            --vault-slate: #1E293B;
+            --accent-teal: #14B8A6;
+            --accent-teal-glow: #0D9488;
+            --accent-teal-light: #2DD4BF;
+            --accent-gold: #F59E0B;
+            --neutral-100: #F4F4F5;
+            --neutral-200: #E4E4E7;
+            --neutral-300: #D4D4D8;
+            --neutral-400: #A1A1AA;
+            --neutral-500: #71717A;
+            --neutral-600: #52525B;
+        }
 
-        /* Streamlit specific overrides */
-        .stApp {{
-            font-family: {font_family};
-        }}
+        /* ═══════════════════════════════════════════════════════════════════════════
+           GOOGLE FONTS - Elegant Typography
+           ═══════════════════════════════════════════════════════════════════════════ */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
 
+        /* ═══════════════════════════════════════════════════════════════════════════
+           NOISE TEXTURE OVERLAY - Removes cheap digital look
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .stApp::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.025;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            background-repeat: repeat;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           GLOBAL STYLES - Base theme
+           ═══════════════════════════════════════════════════════════════════════════ */
+        html, body, .stApp {
+            background-color: var(--vault-obsidian) !important;
+            color: var(--neutral-200) !important;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+        }
+
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Selection styling */
+        ::selection {
+            background-color: rgba(20, 184, 166, 0.3);
+            color: white;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           AURORA GRADIENT BACKGROUND - Animated mesh
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .stApp {
+            background:
+                radial-gradient(ellipse 80% 50% at 20% -20%, rgba(20, 184, 166, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 40% at 80% -10%, rgba(245, 158, 11, 0.05) 0%, transparent 50%),
+                radial-gradient(ellipse 70% 50% at 50% 120%, rgba(20, 184, 166, 0.06) 0%, transparent 50%),
+                linear-gradient(180deg, var(--vault-obsidian) 0%, var(--vault-midnight) 100%) !important;
+            background-attachment: fixed !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SIDEBAR - Glassmorphism effect
+           ═══════════════════════════════════════════════════════════════════════════ */
+        [data-testid="stSidebar"] {
+            background: rgba(15, 23, 42, 0.85) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+        }
+
+        [data-testid="stSidebar"] > div:first-child {
+            background: transparent !important;
+            padding-top: 2rem !important;
+        }
+
+        /* Sidebar title */
+        [data-testid="stSidebar"] h1 {
+            font-family: 'Playfair Display', Georgia, serif !important;
+            font-weight: 600 !important;
+            letter-spacing: -0.02em !important;
+            background: linear-gradient(135deg, var(--neutral-100) 0%, var(--accent-teal-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           MAIN CONTENT AREA
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .main .block-container {
+            padding: 3rem 4rem !important;
+            max-width: 1200px !important;
+        }
+
+        /* Main title - Elegant serif */
+        .main h1 {
+            font-family: 'Playfair Display', Georgia, serif !important;
+            font-weight: 600 !important;
+            font-size: 2.5rem !important;
+            letter-spacing: -0.02em !important;
+            margin-bottom: 0.5rem !important;
+            background: linear-gradient(135deg, var(--neutral-100) 0%, var(--accent-teal-light) 50%, var(--neutral-100) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 200% auto;
+            animation: text-shimmer 4s ease-in-out infinite;
+        }
+
+        @keyframes text-shimmer {
+            0%, 100% { background-position: 0% center; }
+            50% { background-position: 200% center; }
+        }
+
+        /* Section headers */
+        .main h2, .main h3 {
+            font-family: 'Playfair Display', Georgia, serif !important;
+            font-weight: 500 !important;
+            color: var(--neutral-100) !important;
+            letter-spacing: -0.01em !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           BUTTONS - Ghost & Primary styles
+           ═══════════════════════════════════════════════════════════════════════════ */
+        /* Ghost buttons (secondary) */
+        .stButton > button {
+            background: rgba(255, 255, 255, 0.02) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 8px !important;
+            color: var(--neutral-200) !important;
+            font-weight: 500 !important;
+            padding: 0.6rem 1.2rem !important;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            backdrop-filter: blur(8px) !important;
+        }
+
+        .stButton > button:hover {
+            background: rgba(20, 184, 166, 0.1) !important;
+            border-color: rgba(20, 184, 166, 0.5) !important;
+            color: var(--accent-teal-light) !important;
+            box-shadow: 0 0 20px rgba(20, 184, 166, 0.2) !important;
+            transform: translateY(-1px) !important;
+        }
+
+        /* Primary buttons */
+        .stButton > button[kind="primary"],
+        .stButton > button[data-testid="baseButton-primary"] {
+            background: linear-gradient(135deg, var(--accent-teal) 0%, var(--accent-teal-light) 100%) !important;
+            border: none !important;
+            color: var(--vault-obsidian) !important;
+            font-weight: 600 !important;
+            box-shadow: 0 4px 15px rgba(20, 184, 166, 0.3) !important;
+        }
+
+        .stButton > button[kind="primary"]:hover,
+        .stButton > button[data-testid="baseButton-primary"]:hover {
+            box-shadow: 0 6px 25px rgba(20, 184, 166, 0.4) !important;
+            transform: translateY(-2px) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           INPUT FIELDS - Glassmorphism
+           ═══════════════════════════════════════════════════════════════════════════ */
         .stTextInput > div > div > input,
         .stTextArea > div > div > textarea,
-        .stSelectbox > div > div > div {{
-            font-family: {font_family};
-        }}
+        .stSelectbox > div > div,
+        .stMultiSelect > div > div {
+            background: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 8px !important;
+            color: var(--neutral-100) !important;
+            backdrop-filter: blur(8px) !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .stTextInput > div > div > input:focus,
+        .stTextArea > div > div > textarea:focus {
+            border-color: var(--accent-teal) !important;
+            box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15), 0 0 20px rgba(20, 184, 166, 0.1) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           CHAT INTERFACE - Premium messaging
+           ═══════════════════════════════════════════════════════════════════════════ */
+        /* Chat input */
+        [data-testid="stChatInput"] {
+            background: rgba(255, 255, 255, 0.02) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 12px !important;
+            backdrop-filter: blur(12px) !important;
+        }
+
+        [data-testid="stChatInput"] textarea {
+            background: transparent !important;
+            color: var(--neutral-100) !important;
+        }
 
         /* Chat messages */
-        .stChatMessage {{
-            font-family: {font_family};
-        }}
+        [data-testid="stChatMessage"] {
+            background: rgba(255, 255, 255, 0.02) !important;
+            border: 1px solid rgba(255, 255, 255, 0.05) !important;
+            border-radius: 16px !important;
+            padding: 1.25rem !important;
+            margin-bottom: 1rem !important;
+            backdrop-filter: blur(8px) !important;
+        }
 
-        /* Sidebar */
-        [data-testid="stSidebar"] {{
+        /* User message */
+        [data-testid="stChatMessage"][data-testid*="user"] {
+            background: rgba(20, 184, 166, 0.08) !important;
+            border-color: rgba(20, 184, 166, 0.15) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           EXPANDERS - Shield Card style
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .streamlit-expanderHeader {
+            background: rgba(255, 255, 255, 0.02) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 12px !important;
+            color: var(--neutral-200) !important;
+            font-weight: 500 !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .streamlit-expanderHeader:hover {
+            background: rgba(20, 184, 166, 0.05) !important;
+            border-color: rgba(20, 184, 166, 0.3) !important;
+            box-shadow: 0 0 15px rgba(20, 184, 166, 0.1) !important;
+        }
+
+        .streamlit-expanderContent {
+            background: rgba(255, 255, 255, 0.01) !important;
+            border: 1px solid rgba(255, 255, 255, 0.05) !important;
+            border-top: none !important;
+            border-radius: 0 0 12px 12px !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           TABS - Modern segmented control
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .stTabs [data-baseweb="tab-list"] {
+            background: rgba(255, 255, 255, 0.02) !important;
+            border-radius: 10px !important;
+            padding: 4px !important;
+            gap: 4px !important;
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            background: transparent !important;
+            border-radius: 8px !important;
+            color: var(--neutral-400) !important;
+            font-weight: 500 !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .stTabs [data-baseweb="tab"]:hover {
+            color: var(--neutral-200) !important;
+            background: rgba(255, 255, 255, 0.05) !important;
+        }
+
+        .stTabs [aria-selected="true"] {
+            background: rgba(20, 184, 166, 0.15) !important;
+            color: var(--accent-teal-light) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           METRICS & STATS - Premium cards
+           ═══════════════════════════════════════════════════════════════════════════ */
+        [data-testid="stMetric"] {
+            background: rgba(255, 255, 255, 0.02) !important;
+            border: 1px solid rgba(255, 255, 255, 0.05) !important;
+            border-radius: 12px !important;
+            padding: 1.25rem !important;
+        }
+
+        [data-testid="stMetricValue"] {
+            font-family: 'Playfair Display', Georgia, serif !important;
+            color: var(--accent-teal-light) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           DIVIDERS - Subtle elegance
+           ═══════════════════════════════════════════════════════════════════════════ */
+        hr {
+            border: none !important;
+            height: 1px !important;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent) !important;
+            margin: 1.5rem 0 !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           ALERTS & MESSAGES
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .stAlert {
+            background: rgba(255, 255, 255, 0.02) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 10px !important;
+            backdrop-filter: blur(8px) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           PROGRESS BARS - Teal glow
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .stProgress > div > div {
+            background: linear-gradient(90deg, var(--accent-teal) 0%, var(--accent-teal-light) 100%) !important;
+            box-shadow: 0 0 10px rgba(20, 184, 166, 0.5) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SPINNERS - Teal accent
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .stSpinner > div > div {
+            border-top-color: var(--accent-teal) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           CAPTIONS & SMALL TEXT
+           ═══════════════════════════════════════════════════════════════════════════ */
+        .stCaption, small, .st-emotion-cache-1inwz65 {
+            color: var(--neutral-500) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           SCROLLBAR - Thin & elegant
+           ═══════════════════════════════════════════════════════════════════════════ */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(20, 184, 166, 0.3);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(20, 184, 166, 0.5);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           PILLS / LANGUAGE SWITCHER
+           ═══════════════════════════════════════════════════════════════════════════ */
+        [data-testid="stPills"] button {
+            background: rgba(255, 255, 255, 0.03) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            color: var(--neutral-400) !important;
+            transition: all 0.3s ease !important;
+        }
+
+        [data-testid="stPills"] button:hover {
+            background: rgba(20, 184, 166, 0.1) !important;
+            border-color: rgba(20, 184, 166, 0.3) !important;
+        }
+
+        [data-testid="stPills"] button[aria-pressed="true"] {
+            background: rgba(20, 184, 166, 0.15) !important;
+            border-color: var(--accent-teal) !important;
+            color: var(--accent-teal-light) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           FORMS - Premium styling
+           ═══════════════════════════════════════════════════════════════════════════ */
+        [data-testid="stForm"] {
+            background: rgba(255, 255, 255, 0.02) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 16px !important;
+            padding: 2rem !important;
+            backdrop-filter: blur(12px) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           DIALOG / MODAL - Glassmorphism
+           ═══════════════════════════════════════════════════════════════════════════ */
+        [data-testid="stModal"] > div {
+            background: rgba(15, 23, 42, 0.95) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 20px !important;
+            backdrop-filter: blur(20px) !important;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════════════════
+           TOAST NOTIFICATIONS
+           ═══════════════════════════════════════════════════════════════════════════ */
+        [data-testid="stToast"] {
+            background: rgba(15, 23, 42, 0.95) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-radius: 12px !important;
+            backdrop-filter: blur(12px) !important;
+        }
+    """
+
+    css = f"""
+    <style>
+        {vault_theme}
+
+        /* Global font family override */
+        html, body, [class*="css"] {{
             font-family: {font_family};
         }}
 

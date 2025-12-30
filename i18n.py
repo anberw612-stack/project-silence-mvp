@@ -251,11 +251,23 @@ def render_language_switcher(position: str = 'sidebar', key_prefix: str = '') ->
     # Use unique keys based on position
     selector_key = f'{key_prefix}language_selector' if key_prefix else f'{position}_lang_selector'
 
+    # Inject CSS to make language pills same width
+    st.markdown('''
+        <style>
+        /* Make language switcher pills same width */
+        [data-testid="stPills"] > div > div > button {
+            min-width: 72px !important;
+            justify-content: center !important;
+        }
+        </style>
+    ''', unsafe_allow_html=True)
+
     # Use pills/segmented control for clean non-editable selection
+    # Using text labels without flags for cleaner look
     selected = st.pills(
         "Language",
         options=['en', 'zh'],
-        format_func=lambda x: "EN 🇺🇸" if x == 'en' else "中文 🇨🇳",
+        format_func=lambda x: "English" if x == 'en' else "中文",
         default=current_lang,
         key=selector_key,
         label_visibility="collapsed"
@@ -720,6 +732,21 @@ def inject_font_css() -> None:
             border-radius: 16px !important;
             padding: 2rem !important;
             backdrop-filter: blur(12px) !important;
+        }
+
+        /* Hide the "Press Enter to submit form" hint - cleaner look */
+        [data-testid="stForm"] [data-testid="InputInstructions"] {
+            display: none !important;
+        }
+
+        /* Alternative: If you want to keep it but position correctly */
+        [data-testid="InputInstructions"] {
+            position: static !important;
+            margin-top: 4px !important;
+            text-align: right !important;
+            font-size: 0.75rem !important;
+            color: var(--neutral-500) !important;
+            opacity: 0.7 !important;
         }
 
         /* ═══════════════════════════════════════════════════════════════════════════

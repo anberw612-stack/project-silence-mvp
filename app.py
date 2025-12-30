@@ -958,7 +958,7 @@ with st.sidebar:
                     #     st.toast("Pin feature coming soon!")
 
                     # Delete option
-                    if st.button(f"🗑️ Delete", key=f"delete_{session_id}", use_container_width=True, type="secondary"):
+                    if st.button("Delete", key=f"delete_{session_id}", use_container_width=True, type="secondary", icon=":material/delete:"):
                         db.delete_session(session_id)
                         if session_id == st.session_state.current_session_id:
                             start_new_chat()
@@ -969,7 +969,7 @@ with st.sidebar:
     st.divider()
 
     # --- Settings ---
-    with st.expander(f"⚙️ {t('nav.settings')}", expanded=False):
+    with st.expander(t('nav.settings'), expanded=False, icon=":material/settings:"):
         st.markdown(f'''
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
                 {icons.key(size=16, color='#14B8A6')}
@@ -1004,7 +1004,7 @@ with st.sidebar:
         st.divider()
 
         st.session_state.debug_mode = st.checkbox(
-            f"🔍 Debug Mode",
+            "Debug Mode",
             value=st.session_state.debug_mode,
             help=t('sidebar.debug_mode')
         )
@@ -1076,7 +1076,7 @@ with st.sidebar:
             st.divider()
 
     # --- Database Stats ---
-    with st.expander("📊 Statistics", expanded=False):
+    with st.expander("Statistics", expanded=False, icon=":material/bar_chart:"):
         conv_count = db.get_conversation_count()
         session_count = len(db.get_all_sessions(limit=100))
 

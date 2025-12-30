@@ -1080,11 +1080,8 @@ with st.sidebar:
         conv_count = db.get_conversation_count()
         session_count = len(db.get_all_sessions(limit=100))
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Decoys", conv_count)
-        with col2:
-            st.metric("Chats", session_count)
+        st.metric("Total Decoys", conv_count)
+        st.metric("Your Conversations", session_count)
 
         st.caption("Decoys are privacy-preserving variants generated from your conversations.")
 

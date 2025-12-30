@@ -250,50 +250,22 @@ def render_language_switcher(position: str = 'sidebar', key_prefix: str = '') ->
 
     # Create language options
     options = list(SUPPORTED_LANGUAGES.keys())
-    labels = list(SUPPORTED_LANGUAGES.values())
-
-    current_index = options.index(current_lang) if current_lang in options else 0
 
     # Use unique keys based on position
-    en_key = f'{key_prefix}lang_en' if key_prefix else f'{position}_lang_en'
-    zh_key = f'{key_prefix}lang_zh' if key_prefix else f'{position}_lang_zh'
+    selector_key = f'{key_prefix}language_selector' if key_prefix else f'{position}_lang_selector'
 
-    if position == 'sidebar':
-        # Compact button-style switcher for sidebar
-        col1, col2 = st.columns(2)
+    # Use a simple selectbox for clean, compact display
+    selected = st.selectbox(
+        "🌐",
+        options=options,
+        format_func=lambda x: "English" if x == 'en' else "中文",
+        index=options.index(current_lang) if current_lang in options else 0,
+        key=selector_key,
+        label_visibility="collapsed"
+    )
 
-        with col1:
-            if st.button(
-                '🇺🇸 EN',
-                key=en_key,
-                use_container_width=True,
-                type='primary' if current_lang == 'en' else 'secondary'
-            ):
-                if current_lang != 'en':
-                    set_language('en')
-
-        with col2:
-            if st.button(
-                '🇨🇳 中文',
-                key=zh_key,
-                use_container_width=True,
-                type='primary' if current_lang == 'zh' else 'secondary'
-            ):
-                if current_lang != 'zh':
-                    set_language('zh')
-    else:
-        # Dropdown for main area
-        selector_key = f'{key_prefix}language_selector' if key_prefix else 'language_selector'
-        selected = st.selectbox(
-            t('nav.language'),
-            options=options,
-            format_func=lambda x: SUPPORTED_LANGUAGES[x],
-            index=current_index,
-            key=selector_key
-        )
-
-        if selected != current_lang:
-            set_language(selected)
+    if selected != current_lang:
+        set_language(selected)
 
 
 def get_app_name() -> str:

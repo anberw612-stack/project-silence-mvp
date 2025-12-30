@@ -169,10 +169,10 @@ def render_auth_page():
     # Inject font CSS for proper character rendering
     inject_font_css()
 
-    # Language switcher at top right corner
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col3:
-        render_language_switcher(position='sidebar', key_prefix='auth_')
+    # Language switcher at top right corner - compact dropdown
+    col1, col2 = st.columns([4, 1])
+    with col2:
+        render_language_switcher(position='auth', key_prefix='auth_')
 
     st.title(f"🛡️ {get_app_name()}")
     st.markdown(f"*{t('app.description')}*")

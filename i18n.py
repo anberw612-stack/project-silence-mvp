@@ -238,12 +238,13 @@ def t(key: str, **kwargs) -> str:
     return value if isinstance(value, str) else key
 
 
-def render_language_switcher(position: str = 'sidebar') -> None:
+def render_language_switcher(position: str = 'sidebar', key_prefix: str = '') -> None:
     """
     Render a language switcher component.
 
     Args:
         position: Where to render ('sidebar' or 'main')
+        key_prefix: Prefix for button keys to avoid duplicates
     """
     current_lang = get_current_language()
 
@@ -253,6 +254,10 @@ def render_language_switcher(position: str = 'sidebar') -> None:
 
     current_index = options.index(current_lang) if current_lang in options else 0
 
+    # Use unique keys based on position
+    en_key = f'{key_prefix}lang_en' if key_prefix else f'{position}_lang_en'
+    zh_key = f'{key_prefix}lang_zh' if key_prefix else f'{position}_lang_zh'
+
     if position == 'sidebar':
         # Compact button-style switcher for sidebar
         col1, col2 = st.columns(2)
@@ -260,7 +265,7 @@ def render_language_switcher(position: str = 'sidebar') -> None:
         with col1:
             if st.button(
                 '🇺🇸 EN',
-                key='lang_en',
+                key=en_key,
                 use_container_width=True,
                 type='primary' if current_lang == 'en' else 'secondary'
             ):
@@ -270,7 +275,7 @@ def render_language_switcher(position: str = 'sidebar') -> None:
         with col2:
             if st.button(
                 '🇨🇳 中文',
-                key='lang_zh',
+                key=zh_key,
                 use_container_width=True,
                 type='primary' if current_lang == 'zh' else 'secondary'
             ):
@@ -278,12 +283,13 @@ def render_language_switcher(position: str = 'sidebar') -> None:
                     set_language('zh')
     else:
         # Dropdown for main area
+        selector_key = f'{key_prefix}language_selector' if key_prefix else 'language_selector'
         selected = st.selectbox(
             t('nav.language'),
             options=options,
             format_func=lambda x: SUPPORTED_LANGUAGES[x],
             index=current_index,
-            key='language_selector'
+            key=selector_key
         )
 
         if selected != current_lang:

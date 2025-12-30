@@ -248,19 +248,17 @@ def render_language_switcher(position: str = 'sidebar', key_prefix: str = '') ->
     """
     current_lang = get_current_language()
 
-    # Create language options
-    options = list(SUPPORTED_LANGUAGES.keys())
-
     # Use unique keys based on position
     selector_key = f'{key_prefix}language_selector' if key_prefix else f'{position}_lang_selector'
 
-    # Use a simple selectbox for clean, compact display
-    selected = st.selectbox(
-        "🌐",
-        options=options,
-        format_func=lambda x: "English" if x == 'en' else "中文",
-        index=options.index(current_lang) if current_lang in options else 0,
+    # Use radio buttons for non-editable selection
+    selected = st.radio(
+        "Language",
+        options=['en', 'zh'],
+        format_func=lambda x: "EN" if x == 'en' else "中文",
+        index=0 if current_lang == 'en' else 1,
         key=selector_key,
+        horizontal=True,
         label_visibility="collapsed"
     )
 

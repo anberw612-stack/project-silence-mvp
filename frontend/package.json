@@ -14,11 +14,11 @@
     "framer-motion": "^10.16.16",
     "lucide-react": "^0.303.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
     "@types/react": "^18.2.45",
-    "@types/react-dom": "^18.2.18",
+    "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.16",
     "picomatch": "^2.3.2",

@@ -16,8 +16,10 @@ This layer prevents unnecessary decoy generation for queries that don't
 need privacy protection, saving API costs and improving relevance.
 """
 
-from openai import OpenAI
 import json
+
+from fortress_models import MINIMAX_BASE_URL, MINIMAX_CHAT_MODEL, build_llm_client
+from llm_response_utils import extract_json_payload
 
 # Classification prompt for Layer 0
 ROUTER_SYSTEM_PROMPT = """You are the 'Privacy Router' - a classifier that determines if a query contains privacy-sensitive information.
@@ -142,13 +144,13 @@ def quick_classify(query: str) -> dict:
     return None
 
 
-def classify_query(query: str, api_key: str, base_url: str = "https://api.deepseek.com") -> dict:
+def classify_query(query: str, api_key: str, base_url: str = MINIMAX_BASE_URL) -> dict:
     """
     Classify a query to determine privacy sensitivity and whether decoy generation is needed.
 
     Args:
         query: The user's query text
-        api_key: DeepSeek API key
+        api_key: MiniMax API key
         base_url: API base URL
 
     Returns:
@@ -164,10 +166,10 @@ def classify_query(query: str, api_key: str, base_url: str = "https://api.deepse
     try:
         print(f"🚦 [L0] Using LLM classification for query: {query[:50]}...")
 
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        client = build_llm_client(api_key=api_key, base_url=base_url)
 
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model=MINIMAX_CHAT_MODEL,
             messages=[
                 {"role": "system", "content": ROUTER_SYSTEM_PROMPT},
                 {"role": "user", "content": f"Classify this query:\n\n{query}"}
@@ -181,7 +183,7 @@ def classify_query(query: str, api_key: str, base_url: str = "https://api.deepse
         if not content:
             return _default_ambiguous()
 
-        result = json.loads(content)
+        result = extract_json_payload(content)
 
         # Validate required fields
         required_fields = ["category", "confidence", "privacy_risk", "should_generate_decoy"]
@@ -253,7 +255,7 @@ def route_query(query: str, api_key: str) -> tuple:
 
     Args:
         query: User's query
-        api_key: DeepSeek API key
+        api_key: MiniMax API key
 
     Returns:
         tuple: (should_generate_decoy: bool, classification: dict, feedback_prompt: str)

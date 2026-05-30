@@ -1,0 +1,50 @@
+name: Privacy or medical-safety review
+description: Request review for privacy, re-identification, consent, or medical-safety concerns.
+title: "[Safety]: "
+labels: ["privacy", "medical-safety", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for design concerns, threat-model gaps, unsafe medical boundaries, consent issues, or decoy re-identification risks. Use synthetic examples only.
+  - type: dropdown
+    id: concern_type
+    attributes:
+      label: Concern type
+      options:
+        - Re-identification risk
+        - Consent or deletion workflow
+        - Unsafe medical or crisis behavior
+        - Public decoy pool abuse
+        - Secret or infrastructure exposure
+        - Retrieval or reranking mismatch
+        - Other privacy issue
+    validations:
+      required: true
+  - type: textarea
+    id: concern
+    attributes:
+      label: Concern
+      description: What could go wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: synthetic_example
+    attributes:
+      label: Synthetic example
+      description: Provide a fake example if one helps explain the risk.
+    validations:
+      required: false
+  - type: textarea
+    id: suggested_fix
+    attributes:
+      label: Suggested fix or mitigation
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I did not include real private health data, secrets, or production database content.
+          required: true

@@ -13,6 +13,10 @@ import { Shield, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import GhostButton from './GhostButton';
 
+const REPO_URL = 'https://github.com/anberw612-stack/project-silence-mvp';
+const DOCS_URL = `${REPO_URL}/tree/main/docs`;
+const ROADMAP_URL = `${REPO_URL}/blob/main/docs/roadmap.md`;
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // NAVBAR COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -21,10 +25,10 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const navLinks = [
-    { name: 'Features', href: '#features' },
-    { name: 'Security', href: '#security' },
-    { name: 'Pricing', href: '#pricing' },
-    { name: 'About', href: '#about' },
+    { name: 'Pipeline', href: '#features' },
+    { name: 'Docs', href: DOCS_URL, external: true },
+    { name: 'Roadmap', href: ROADMAP_URL, external: true },
+    { name: 'GitHub', href: REPO_URL, external: true },
   ];
 
   return (
@@ -54,7 +58,7 @@ const Navbar = () => {
               </div>
             </div>
             <span className="font-serif font-semibold text-xl text-white tracking-tight">
-              Confuser
+              Fortress
             </span>
           </motion.a>
 
@@ -75,6 +79,8 @@ const Navbar = () => {
                 >
                   <a
                     href={link.href}
+                    target={link.external ? '_blank' : undefined}
+                    rel={link.external ? 'noreferrer' : undefined}
                     className="text-sm text-neutral-400 hover:text-accent-teal transition-colors duration-300 tracking-wide"
                   >
                     {link.name}
@@ -89,9 +95,11 @@ const Navbar = () => {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.7, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             >
-              <GhostButton size="small" variant="teal">
-                Get Started
-              </GhostButton>
+              <a href={DOCS_URL} target="_blank" rel="noreferrer">
+                <GhostButton size="small" variant="teal">
+                  Review Docs
+                </GhostButton>
+              </a>
             </motion.div>
           </div>
 
@@ -122,6 +130,8 @@ const Navbar = () => {
             <a
               key={link.name}
               href={link.href}
+              target={link.external ? '_blank' : undefined}
+              rel={link.external ? 'noreferrer' : undefined}
               className="block text-neutral-300 hover:text-accent-teal transition-colors duration-300 py-2"
               onClick={() => setIsOpen(false)}
             >
@@ -129,9 +139,11 @@ const Navbar = () => {
             </a>
           ))}
           <div className="pt-4">
-            <GhostButton size="small" variant="teal" className="w-full">
-              Get Started
-            </GhostButton>
+            <a href={DOCS_URL} target="_blank" rel="noreferrer" onClick={() => setIsOpen(false)}>
+              <GhostButton size="small" variant="teal" className="w-full">
+                Review Docs
+              </GhostButton>
+            </a>
           </div>
         </div>
       </motion.div>

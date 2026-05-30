@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a reproducible Fortress bug using synthetic data only.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Fortress. Do not include real health stories, private user data, API keys, database URLs, or screenshots that expose secrets.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps with synthetic data
+      description: Use fake examples that do not describe a real person.
+      placeholder: |
+        1. Start the app with test secrets.
+        2. Enter this synthetic message...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Privacy router
+        - Embedding retrieval
+        - Gatekeeper reranking
+        - Decoy generation
+        - Supabase persistence
+        - Streamlit UI
+        - Documentation or setup
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I did not include real private health data or credentials.
+          required: true

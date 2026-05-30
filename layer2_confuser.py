@@ -1,13 +1,15 @@
 """
 Layer 2: Confuser Module (LLM-Powered)
 
-This module implements LLM-based semantic perturbation using DeepSeek API
+This module implements LLM-based semantic perturbation using MiniMax
 to protect user privacy by intelligently replacing identifying information
 while maintaining semantic meaning.
 """
 
-from openai import OpenAI
 import re
+
+from fortress_models import MINIMAX_BASE_URL, MINIMAX_CHAT_MODEL, build_llm_client
+from llm_response_utils import extract_json_payload, sanitize_llm_text
 
 
 # System prompt for the LLM
@@ -22,17 +24,17 @@ Rules:
 - OUTPUT ONLY THE TRANSFORMED TEXT. NO EXPLANATIONS."""
 
 
-def perturb_text(text, api_key, base_url="https://api.deepseek.com"):
+def perturb_text(text, api_key, base_url=MINIMAX_BASE_URL):
     """
     Perturb the input text using LLM-based semantic transformation.
     
-    This function uses the DeepSeek API to intelligently replace identifying
+    This function uses MiniMax to intelligently replace identifying
     information while preserving the semantic meaning and emotional content.
     
     Args:
         text (str): The original text to perturb
-        api_key (str): DeepSeek API key
-        base_url (str): API endpoint URL (default: "https://api.deepseek.com")
+        api_key (str): MiniMax API key
+        base_url (str): API endpoint URL for MiniMax
         
     Returns:
         str: The perturbed text with identifying information replaced
@@ -52,15 +54,12 @@ def perturb_text(text, api_key, base_url="https://api.deepseek.com"):
         if not api_key:
             raise ValueError("API key is required for LLM-based perturbation")
         
-        # Initialize OpenAI client with DeepSeek endpoint
-        client = OpenAI(
-            api_key=api_key,
-            base_url=base_url
-        )
+        # Initialize OpenAI-compatible client with MiniMax endpoint
+        client = build_llm_client(api_key=api_key, base_url=base_url)
         
         # Call the API with the system prompt
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model=MINIMAX_CHAT_MODEL,
             messages=[
                 {"role": "system", "content": CONFUSER_SYSTEM_PROMPT},
                 {"role": "user", "content": text}
@@ -70,7 +69,7 @@ def perturb_text(text, api_key, base_url="https://api.deepseek.com"):
         )
         
         # Extract the perturbed text from the response
-        perturbed = response.choices[0].message.content.strip()
+        perturbed = sanitize_llm_text(response.choices[0].message.content)
         
         return perturbed
         
@@ -124,14 +123,14 @@ Rules:
 - OUTPUT ONLY the sanitized response text."""
 
 
-def sanitize_response_consistency(original_response, obfuscated_query, api_key, base_url="https://api.deepseek.com"):
+def sanitize_response_consistency(original_response, obfuscated_query, api_key, base_url=MINIMAX_BASE_URL):
     """
     Sanitize the AI response to be consistent with the obfuscated persona.
     
     Args:
         original_response (str): The raw response from the AI
         obfuscated_query (str): The obfuscated query (defining the target persona)
-        api_key (str): DeepSeek API key
+        api_key (str): MiniMax API key
         base_url (str): API endpoint URL
         
     Returns:
@@ -144,10 +143,7 @@ def sanitize_response_consistency(original_response, obfuscated_query, api_key, 
         print(f"Sanitizing response...")
             
         # Initialize OpenAI client
-        client = OpenAI(
-            api_key=api_key,
-            base_url=base_url
-        )
+        client = build_llm_client(api_key=api_key, base_url=base_url)
         
         # Prepare the conversation context
         user_content = f"""
@@ -157,7 +153,7 @@ Obfuscated Query: "{obfuscated_query}"
         
         # Call the API
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model=MINIMAX_CHAT_MODEL,
             messages=[
                 {"role": "system", "content": SANITIZER_SYSTEM_PROMPT},
                 {"role": "user", "content": user_content}
@@ -166,7 +162,7 @@ Obfuscated Query: "{obfuscated_query}"
             max_tokens=1000
         )
         
-        sanitized = response.choices[0].message.content.strip()
+        sanitized = sanitize_llm_text(response.choices[0].message.content)
         return sanitized
         
     except Exception as e:
@@ -185,14 +181,14 @@ Task: Identify sensitive entities in the Query (Name, Location, Age, Role). Repl
 - Output ONLY valid JSON: {"query": "...", "response": "..."}."""
 
 
-def perturb_pair(query, response_text, api_key, base_url="https://api.deepseek.com"):
+def perturb_pair(query, response_text, api_key, base_url=MINIMAX_BASE_URL):
     """
     Perturb a Query/Response pair atomically to ensure entity consistency.
     
     Args:
         query (str): The original user query
         response_text (str): The original AI response
-        api_key (str): DeepSeek API key
+        api_key (str): MiniMax API key
         
     Returns:
         dict: {'query': '...', 'response': '...'} with consistent obfuscation
@@ -202,15 +198,12 @@ def perturb_pair(query, response_text, api_key, base_url="https://api.deepseek.c
             return {'query': query, 'response': response_text}
             
         # Initialize OpenAI client
-        client = OpenAI(
-            api_key=api_key,
-            base_url=base_url
-        )
+        client = build_llm_client(api_key=api_key, base_url=base_url)
         
         user_content = f"Query: {query}\nResponse: {response_text}"
         
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model=MINIMAX_CHAT_MODEL,
             messages=[
                 {"role": "system", "content": PAIR_PERTURB_SYSTEM_PROMPT},
                 {"role": "user", "content": user_content}
@@ -220,8 +213,7 @@ def perturb_pair(query, response_text, api_key, base_url="https://api.deepseek.c
             max_tokens=1000
         )
         
-        import json
-        result = json.loads(response.choices[0].message.content)
+        result = extract_json_payload(response.choices[0].message.content)
         return result
         
     except Exception as e:
@@ -257,7 +249,7 @@ LEGACY_AGES = {
 if __name__ == "__main__":
     # Test the confuser module
     print("\n=== Testing LLM-Powered Confuser Module ===\n")
-    print("This module now requires a DeepSeek API key.")
+    print("This module now requires a MiniMax API key.")
     print("To test, run main.py with your API key.\n")
     print("System Prompt:")
     print("-" * 60)

@@ -1,11 +1,13 @@
 # Confuser MVP: LLM Upgrade Specification
 
+> Legacy design note: This historical planning document predates the current Fortress architecture and does not describe the current Fortress production, safety, compliance, or medical posture. Use `README.md` and `docs/` as the canonical public documentation.
+
 ## Task
 Rewrite ONLY `layer2_confuser.py` to use a real LLM for semantic perturbation.
 
 ## Specifications for `layer2_confuser.py`
-1. **Library**: Use `openai` client (standard interface for DeepSeek/OpenAI).
-2. **Function Signature**: `perturb_text(text, api_key, base_url="https://api.deepseek.com")`
+1. **Library**: Use `openai` client (standard interface for OpenAI-compatible providers).
+2. **Function Signature**: `perturb_text(text, api_key, base_url="https://example-llm-provider.invalid/v1")`
 3. **System Prompt**:
    """
    You are the 'Confuser' privacy module.
@@ -20,7 +22,7 @@ Rewrite ONLY `layer2_confuser.py` to use a real LLM for semantic perturbation.
    """
 4. **Logic**:
    - Initialize `OpenAI` client with the key and base_url.
-   - Call `client.chat.completions.create` (model="deepseek-chat").
+   - Call `client.chat.completions.create` with the configured model name.
    - Return the `content` from the response.
 
 ## Specifications for `main.py` (Update needed)

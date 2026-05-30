@@ -1,7 +1,7 @@
 """
 Layer 3: User Bridge - Main CLI Interface (LLM-Powered)
 
-This is the main entry point for the Confuser MVP system with LLM integration.
+This is the main entry point for the Fortress prototype with LLM integration.
 It integrates Layer 1 (semantic matching) and Layer 2 (LLM-based privacy perturbation)
 to provide an interactive CLI experience.
 """
@@ -13,9 +13,9 @@ import sys
 
 
 def print_banner():
-    """Print the welcome banner for the Confuser system."""
+    """Print the welcome banner for Fortress."""
     print("\n" + "=" * 50)
-    print("=== CONFUSER MVP SYSTEM (LLM-Powered) ===")
+    print("=== FORTRESS PROTOTYPE (LLM-Powered) ===")
     print("=" * 50)
     print("\nPrivacy-preserving query matching with AI")
     print("Type 'exit' to quit\n")
@@ -33,18 +33,18 @@ def get_api_key():
     Returns:
         str: The API key, or None if user wants to skip
     """
-    print("🔑 DeepSeek API Configuration")
+    print("🔑 MiniMax API Configuration")
     print("-" * 50)
-    print("This version uses DeepSeek AI for intelligent privacy protection.")
-    print("You need a DeepSeek API key to use this feature.")
-    print("\nGet your API key at: https://platform.deepseek.com/")
+    print("This version uses MiniMax m2.7 for intelligent privacy protection.")
+    print("You need a MiniMax API key to use this feature.")
+    print("\nGet your API key from the MiniMax developer platform.")
     print("\nOptions:")
     print("  1. Enter your API key (input will be hidden)")
     print("  2. Press ENTER to skip (system will not function)")
     print()
     
     try:
-        api_key = getpass.getpass("Enter your DeepSeek API key (or press ENTER to skip): ").strip()
+        api_key = getpass.getpass("Enter your MiniMax API key (or press ENTER to skip): ").strip()
         
         if not api_key:
             print("\n⚠️  No API key provided. The system cannot function without it.")
@@ -60,7 +60,7 @@ def get_api_key():
 
 def main():
     """
-    Main application loop for the Confuser MVP system with LLM integration.
+    Main application loop for the Fortress prototype with LLM integration.
     
     Workflow:
     1. Collect API key from user
@@ -83,8 +83,8 @@ def main():
         
         print_separator()
         
-        # Initialize the semantic matcher (this will load the model)
-        print("\n⚙️  Initializing Confuser system...")
+        # Initialize the semantic matcher (remote embedding API mode)
+        print("\n⚙️  Initializing Fortress...")
         matcher = SemanticMatcher()
         print_separator()
         
@@ -96,7 +96,7 @@ def main():
                 
                 # Check for exit command
                 if user_query.lower() == 'exit':
-                    print("\n👋 Thank you for using Confuser MVP. Goodbye!\n")
+                    print("\n👋 Thank you for using Fortress. Goodbye!\n")
                     break
                 
                 # Skip empty queries
@@ -159,7 +159,7 @@ def main():
                 print_separator()
         
     except Exception as e:
-        print(f"\n❌ Fatal error initializing Confuser system: {e}")
+        print(f"\n❌ Fatal error initializing Fortress: {e}")
         print("   Please check your dependencies and try again.\n")
         return 1
     

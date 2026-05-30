@@ -11,14 +11,21 @@ Tables (in Supabase):
 - conversations: Decoys for peer insights (source_id for deduplication)
 """
 
-import streamlit as st
-from supabase import create_client, Client
 from datetime import datetime
 import uuid
 import json
 
 
-def get_supabase_client() -> Client:
+def _streamlit():
+    return __import__("streamlit")
+
+
+def _supabase_create_client():
+    module = __import__("supabase", fromlist=["create_client"])
+    return module.create_client
+
+
+def get_supabase_client():
     """
     Get or create a Supabase client using Streamlit secrets.
     Thread-safe: Creates a new client if called from a background thread.
@@ -28,6 +35,9 @@ def get_supabase_client() -> Client:
     """
     import threading
     import os
+
+    st = _streamlit()
+    create_client = _supabase_create_client()
 
     # Check if we're in the main Streamlit thread
     is_main_thread = threading.current_thread() is threading.main_thread()
@@ -58,6 +68,7 @@ def get_current_user_id() -> str:
     Returns:
         str: User ID or None if not logged in
     """
+    st = _streamlit()
     if "user" in st.session_state and st.session_state.user:
         return st.session_state.user.id
     return None
@@ -465,6 +476,8 @@ def get_global_decoy_response(query_text: str) -> str:
         return None
 
 
+# TODO (Phase 1): Disabled for medical privacy compliance.
+'''
 def get_decoy_owner_email(query_text: str) -> str:
     """
     Retrieve the owner's email for a specific decoy (for email relay).
@@ -513,6 +526,7 @@ def get_decoy_owner_email(query_text: str) -> str:
     except Exception as e:
         print(f"❌ Error retrieving decoy owner email: {e}")
         return None
+'''
 
 
 def get_global_decoy_count() -> int:

@@ -1,8 +1,35 @@
 venv/
 __pycache__/
 .DS_Store
+node_modules.broken.*/
+
+# Local secrets and deployment-only configuration
+.claude/settings.local.json
 .streamlit/secrets.toml
+.env
+.env.*
+!.env.example
+
+# Local databases and exports
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql
+
+# Local model caches and heavyweight model artifacts
+.cache/
+models/
+model_cache/
+sentence_transformers/
+*.bin
+*.gguf
+*.onnx
+*.pt
+*.pth
+*.safetensors
 
 # Frontend
 frontend/node_modules/
+frontend/node_modules.broken.*/
 frontend/dist/

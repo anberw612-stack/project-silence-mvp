@@ -1,18 +1,12 @@
 import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 
 /**
- * The Abyssal Layer (HOTFIX: Render Debugging)
- * 
- * fixes:
- * - Z-Index raised to 9999 (with pointer-events: none) to ensure visibility above backgrounds.
- * - DEBUG MODE: Particles forced to Bright RED (#FF0000) and full opacity.
- * - Added console logs to verify animation loop.
+ * Ambient particle layer for the Fortress landing experience.
  */
 const AbyssalLayer = forwardRef((props, ref) => {
     const canvasRef = useRef(null);
     const mouseRef = useRef({ x: -1000, y: -1000 });
     const animationRef = useRef(null);
-    const frameCountRef = useRef(0);
 
     // Particle Systems
     const sedimentRef = useRef([]); // Background layer
@@ -31,11 +25,9 @@ const AbyssalLayer = forwardRef((props, ref) => {
         DEBRIS_DRAG: 0.98,
         SPLASH_FORCE: 8.0,
 
-        // Colors (DEBUG MODE: FORCE RED)
-        // Was: COLOR_CYAN: [100, 255, 255]
-        // Was: COLOR_NAVY: [20, 40, 100]
-        COLOR_CYAN: [255, 0, 0],     // RED (High/Energy)
-        COLOR_NAVY: [200, 0, 0],     // DARK RED (Deep/Sediment)
+        // Colors
+        COLOR_CYAN: [100, 255, 255],
+        COLOR_NAVY: [20, 40, 100],
         COLOR_WHITE: [255, 255, 255],// White remains for debris
 
         // Evaporation
@@ -48,11 +40,9 @@ const AbyssalLayer = forwardRef((props, ref) => {
      */
     useImperativeHandle(ref, () => ({
         triggerShatter: (x, y, width = 300) => {
-            console.log("💥 [AbyssalLayer] Shatter triggered at", x, y);
             createDebris(x, y, width);
         },
         triggerEvaporation: () => {
-            console.log("💨 [AbyssalLayer] Evaporation triggered");
             createEvaporation();
         }
     }));
@@ -93,10 +83,8 @@ const AbyssalLayer = forwardRef((props, ref) => {
     };
 
     useEffect(() => {
-        console.log("🌊 [AbyssalLayer] Mounting & Initializing...");
         const canvas = canvasRef.current;
         if (!canvas) {
-            console.error("❌ [AbyssalLayer] Canvas ref is null!");
             return;
         }
 
@@ -106,7 +94,6 @@ const AbyssalLayer = forwardRef((props, ref) => {
         const resize = () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            console.log("📏 [AbyssalLayer] Resized to", canvas.width, canvas.height);
         };
 
         // Initialize Sediment (Background)
@@ -114,8 +101,6 @@ const AbyssalLayer = forwardRef((props, ref) => {
             const particles = [];
             const zoneTop = window.innerHeight * (1 - CONFIG.ZONE_HEIGHT_RATIO);
             const zoneHeight = window.innerHeight * CONFIG.ZONE_HEIGHT_RATIO;
-
-            console.log(`🔹 [AbyssalLayer] Init Sediment: 130 particles in zone y=${Math.round(zoneTop)} to ${window.innerHeight}`);
 
             for (let i = 0; i < CONFIG.SEDIMENT_COUNT; i++) {
                 const baseY = zoneTop + Math.random() * zoneHeight;
@@ -128,8 +113,8 @@ const AbyssalLayer = forwardRef((props, ref) => {
                     size: 2 + Math.random() * 4,
                     phase: Math.random() * Math.PI * 2,
                     phaseSpeed: 0.005 + Math.random() * 0.01,
-                    color: [...CONFIG.COLOR_NAVY, 1.0], // DEBUG: Full opacity 1.0
-                    targetColor: [...CONFIG.COLOR_NAVY, 1.0],
+                    color: [...CONFIG.COLOR_NAVY, 0.55],
+                    targetColor: [...CONFIG.COLOR_NAVY, 0.55],
                 });
             }
             sedimentRef.current = particles;
@@ -153,11 +138,6 @@ const AbyssalLayer = forwardRef((props, ref) => {
 
         // Animation Loop
         const animate = () => {
-            frameCountRef.current++;
-            if (frameCountRef.current % 300 === 0) {
-                console.log("⏱️ [AbyssalLayer] Animation Loop Running... Frame:", frameCountRef.current);
-            }
-
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             const zoneTop = canvas.height * (1 - CONFIG.ZONE_HEIGHT_RATIO);
@@ -282,8 +262,8 @@ const AbyssalLayer = forwardRef((props, ref) => {
                 width: '100vw',
                 height: '100vh',
                 pointerEvents: 'none',
-                zIndex: 9999, // FIX: Very high z-index
-                background: 'transparent', // FIX: Ensure transparent background
+                zIndex: 9999,
+                background: 'transparent',
             }}
             aria-hidden="true"
         />

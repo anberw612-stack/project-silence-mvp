@@ -1,5 +1,7 @@
 # Project Silence - Architecture Upgrade V2.0
 
+> Legacy design note: This historical planning document predates the current Fortress architecture and does not describe the current Fortress production, safety, compliance, or medical posture. Use `README.md` and `docs/` as the canonical public documentation.
+
 ## 🎯 Objectives
 This document outlines the roadmap to fix the "Privacy Isolation Bug" and implement the "Semantic Router" and "Quality Feedback Loop" features.
 

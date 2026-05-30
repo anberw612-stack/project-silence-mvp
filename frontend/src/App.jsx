@@ -1,7 +1,7 @@
 /**
- * Confuser Landing Page
+ * Fortress Landing Page
  *
- * A luxury fintech and cyber-security landing page featuring:
+ * A privacy-research landing page featuring:
  * - The "Vault" dark theme aesthetic
  * - Glassmorphism and noise texture effects
  * - Sophisticated typography (serif headings, sans body)
@@ -14,7 +14,7 @@ import { Hero, FeaturesGrid, NoiseOverlay, Navbar } from './components';
 function App() {
   return (
     <div className="relative min-h-screen bg-vault-obsidian text-neutral-100 overflow-x-hidden scrollbar-thin">
-      {/* Noise texture overlay for premium feel */}
+      {/* Noise texture overlay for depth */}
       <NoiseOverlay />
 
       {/* Fixed Navigation */}

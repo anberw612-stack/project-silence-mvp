@@ -1,5 +1,7 @@
 # Confuser Project: Web App Expansion (Streamlit + SQLite)
 
+> Legacy design note: This historical planning document predates the current Fortress architecture and does not describe the current Fortress production, safety, compliance, or medical posture. Use `README.md` and `docs/` as the canonical public documentation.
+
 ## 1. Goal
 Convert the current CLI script into a **Web-based Chat Application** using `Streamlit`.
 Enable "Cross-User Knowledge Sharing" where users can see confused versions of past conversations from a real database.
@@ -16,7 +18,7 @@ Create a new file `database_manager.py` to handle SQLite operations.
 - **Function `init_db()`**: Create a table `conversations` with columns:
   - `id` (Primary Key)
   - `original_query` (Text, the user's raw input)
-  - `ai_response` (Text, the answer DeepSeek gave)
+  - `ai_response` (Text, the answer from the configured LLM provider)
   - `timestamp`
 - **Function `save_conversation(query, response)`**: Insert new chat logs.
 - **Function `get_all_queries()`**: Return all stored queries for Layer 1 matching.
@@ -43,7 +45,7 @@ Create `app.py` to replace `main.py` as the entry point.
      - "Someone else asked: [Confused Query]"
      - "AI Answered: [Original AI Response]" (Note: In a full prod, response implies context, but for MVP keep response as is or confuse it too if sensitive).
 4. **Normal Chat:**
-   - Send current user's `query` to DeepSeek (standard chat).
+   - Send current user's `query` to the configured LLM provider (standard chat).
    - Display answer.
    - **Save:** Call `database_manager.save_conversation` to store *this* user's data for future users.
 

@@ -1,5 +1,5 @@
 """
-Confuser Web App - Streamlit Interface
+Fortress Web App - Streamlit Interface
 
 A privacy-preserving chat application that enables cross-user knowledge sharing
 through AI-powered text perturbation.
@@ -13,13 +13,13 @@ Features:
 
 import streamlit as st
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
-from openai import OpenAI
 from layer0_router import route_query, classify_query
 from layer1_matching import SemanticMatcher
 from layer2_confuser import perturb_text, sanitize_response_consistency, perturb_pair
 from layer3_consistency import check_and_fix_response
 from layer4_decoy_factory import generate_decoys
 from decoy_worker import DecoyWorker, get_or_create_worker, stop_worker, get_worker_status
+from fortress_models import MINIMAX_API_KEY, MINIMAX_CHAT_MODEL, build_llm_client
 import database_manager as db
 import auth_ui
 from i18n import (
@@ -27,15 +27,16 @@ from i18n import (
     get_app_name, inject_font_css, SUPPORTED_LANGUAGES
 )
 import icons
-import numpy as np
 import threading
 import uuid
 import os
 import json
 import time
 
-# Default API key for DeepSeek
-DEFAULT_API_KEY = os.environ.get("DEEPSEEK_API_KEY", st.secrets.get("DEEPSEEK_API_KEY", "sk-78279640394f4be3a0308ef6f589f880"))
+from llm_response_utils import sanitize_llm_text
+
+# Default API key for MiniMax
+DEFAULT_API_KEY = MINIMAX_API_KEY
 
 
 # ===================================================================
@@ -69,12 +70,6 @@ inject_font_css()
 # Set to False to use new background worker architecture
 SYNC_DECOY_GENERATION = False  # Use background worker for non-blocking generation
 
-# DEBUG: Print at app start to confirm code version
-print("=" * 60)
-print("🚀 APP STARTED - CODE VERSION: 2025-12-26-v1-BACKGROUND-WORKER")
-print(f"🚀 SYNC_DECOY_GENERATION: {SYNC_DECOY_GENERATION}")
-print("=" * 60)
-
 
 # ===================================================================
 # SESSION STATE INITIALIZATION
@@ -83,7 +78,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "matcher" not in st.session_state:
-    with st.spinner("Loading semantic matching model..."):
+    with st.spinner("Initializing remote semantic matching..."):
         st.session_state.matcher = SemanticMatcher()
 
 if "api_key" not in st.session_state:
@@ -99,6 +94,8 @@ if "generated_decoy_sources" not in st.session_state:
     # Track source_ids of decoys generated in this session to prevent self-matching
     st.session_state.generated_decoy_sources = set()
 
+# TODO (Phase 1): Disabled email UI for medical privacy compliance.
+'''
 # Email composer state
 if "show_email_composer" not in st.session_state:
     st.session_state.show_email_composer = False
@@ -110,6 +107,7 @@ if "email_insight_context" not in st.session_state:
     st.session_state.email_insight_context = ""
 if "email_recipient_email" not in st.session_state:
     st.session_state.email_recipient_email = ""  # The actual recipient email (looked up from decoy)
+'''
 
 # Background worker state
 if "decoy_worker" not in st.session_state:
@@ -126,6 +124,8 @@ if "worker_task_id" not in st.session_state:
 # HELPER FUNCTIONS
 # ===================================================================
 
+# TODO (Phase 1): Disabled email UI for medical privacy compliance.
+'''
 def send_peer_message(to_email: str, subject: str, body: str, insight_context: str = "", sender_email: str = None) -> dict:
     """
     Send an anonymous relay email to a peer user via Outlook SMTP.
@@ -369,6 +369,7 @@ Confuser - Privacy-Preserving AI Chat
             "status": "error",
             "message": f"Failed to send email: {str(e)}"
         }
+'''
 
 
 def inject_insight_bar_css():
@@ -587,6 +588,8 @@ def render_insight_with_chat_button(insight: dict, index: int):
             st.markdown(f"**AI Answer:** {insight['response']}")
 
     with col2:
+        # TODO (Phase 1): Disabled email UI for medical privacy compliance.
+        '''
         # Custom HTML button with tooltip
         # Escape quotes for JavaScript - must be done outside f-string
         escaped_question = insight['question'][:100].replace("'", "\\'")
@@ -599,10 +602,13 @@ def render_insight_with_chat_button(insight: dict, index: int):
         </div>
         """
         st.markdown(button_html, unsafe_allow_html=True)
+        '''
 
     return index
 
 
+# TODO (Phase 1): Disabled email UI for medical privacy compliance.
+'''
 def render_email_composer():
     """
     Render the fixed-position email composer overlay using Streamlit dialog.
@@ -685,29 +691,27 @@ def render_email_composer():
 
     # Call the dialog
     email_dialog()
+'''
 
 
 def get_ai_response(query, api_key):
     """
-    Get response from DeepSeek API for the user's query.
+    Get response from MiniMax for the user's query.
     """
     try:
-        client = OpenAI(
-            api_key=api_key,
-            base_url="https://api.deepseek.com"
-        )
+        client = build_llm_client(api_key=api_key)
 
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model=MINIMAX_CHAT_MODEL,
             messages=[
-                {"role": "system", "content": "You are a helpful AI assistant. Provide clear, concise, and accurate answers."},
+                {"role": "system", "content": "You are Fortress AI, a helpful AI assistant. Provide clear, concise, and accurate answers."},
                 {"role": "user", "content": query}
             ],
             temperature=0.7,
             max_tokens=4096  # Increased from 1000 to allow complete code responses
         )
 
-        return response.choices[0].message.content.strip()
+        return sanitize_llm_text(response.choices[0].message.content)
 
     except Exception as e:
         raise Exception(f"API Error: {str(e)}")
@@ -722,7 +726,7 @@ def find_stratified_insights(user_query, api_key, debug_mode=False, exclude_sour
     
     Args:
         user_query (str): The user's query to find matches for
-        api_key (str): DeepSeek API key for LLM validation
+        api_key (str): Chat-model API key for the assistant response path
         debug_mode (bool): Enable debug output
         exclude_source_id (str): Source ID to exclude (prevents seeing your own just-generated decoys)
         
@@ -765,7 +769,14 @@ def find_stratified_insights(user_query, api_key, debug_mode=False, exclude_sour
     
     matcher = st.session_state.matcher
     
-    matches = matcher.get_stratified_matches(user_query, candidate_queries, candidate_ids, source_ids, exclude_source_id=exclude_source_id)
+    matches = matcher.get_stratified_matches(
+        user_query,
+        candidate_queries,
+        candidate_ids,
+        source_ids,
+        exclude_source_id=exclude_source_id,
+        gatekeeper_enabled=True,
+    )
     
     insights = []
     
@@ -973,7 +984,7 @@ with st.sidebar:
         st.markdown(f'''
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
                 {icons.key(size=16, color='#14B8A6')}
-                <span style="font-size:0.85rem;color:#E4E4E7;font-weight:500;">API Configuration</span>
+                <span style="font-size:0.85rem;color:#E4E4E7;font-weight:500;">MiniMax API Configuration</span>
             </div>
         ''', unsafe_allow_html=True)
 
@@ -990,7 +1001,7 @@ with st.sidebar:
             st.markdown(f'''
                 <div style="display:flex;align-items:center;gap:6px;color:#14B8A6;font-size:0.8rem;">
                     {icons.check(size=14, color='#14B8A6')}
-                    <span>API Key configured</span>
+                    <span>MiniMax API Key configured</span>
                 </div>
             ''', unsafe_allow_html=True)
         else:
@@ -1093,8 +1104,9 @@ with st.sidebar:
 # Inject custom CSS for insight bar and email composer
 inject_insight_bar_css()
 
+# TODO (Phase 1): Disabled email UI for medical privacy compliance.
 # Render email composer dialog if triggered
-render_email_composer()
+# render_email_composer()
 
 # Main title with elegant typography - properly centered icon
 st.markdown(f'''
@@ -1163,6 +1175,8 @@ for msg_idx, message in enumerate(st.session_state.messages):
                             st.markdown(f"**AI Answer:** {insight['response']}")
 
                     with col2:
+                        # TODO (Phase 1): Disabled email UI for medical privacy compliance.
+                        '''
                         # "..." button with tooltip using native Streamlit
                         unique_key = f"chat_btn_hist_{msg_idx}_{insight_idx}"
                         if st.button("×", key=unique_key, help="Message them"):
@@ -1173,6 +1187,7 @@ for msg_idx, message in enumerate(st.session_state.messages):
                             st.session_state.email_subject = f"Re: {insight['question'][:50]}..."
                             st.session_state.email_recipient_email = owner_email or ""
                             st.rerun()
+                        '''
 
 
 # ===================================================================
@@ -1256,6 +1271,8 @@ if prompt := st.chat_input(t('chat.input_placeholder'), disabled=not st.session_
                                 st.markdown(f"**AI Answer:** {insight['response']}")
 
                         with col2:
+                            # TODO (Phase 1): Disabled email UI for medical privacy compliance.
+                            '''
                             # "..." button with tooltip using native Streamlit
                             unique_key = f"chat_btn_new_{new_insight_idx}_{current_source_id[:8]}"
                             if st.button("×", key=unique_key, help="Message them"):
@@ -1266,6 +1283,7 @@ if prompt := st.chat_input(t('chat.input_placeholder'), disabled=not st.session_
                                 st.session_state.email_subject = f"Re: {insight['question'][:50]}..."
                                 st.session_state.email_recipient_email = owner_email or ""
                                 st.rerun()
+                            '''
 
             # Step 2: Get AI response
             try:
@@ -1372,9 +1390,9 @@ st.divider()
 st.markdown(f'''
     <div style="display:flex;align-items:center;gap:8px;color:#71717A;font-size:0.85rem;margin-bottom:4px;">
         {icons.shield(size=14, color='#71717A')}
-        <span>Confuser MVP - Privacy-preserving AI chat with cross-user knowledge sharing</span>
+        <span>Fortress - privacy-preserving AI chat for peer insight retrieval</span>
     </div>
     <div style="color:#52525B;font-size:0.75rem;">
-        Powered by DeepSeek AI • Supabase Auth • Layer 1: Semantic Matching • Layer 2: Privacy Perturbation
+        Powered by MiniMax m2.7 • Supabase Auth • Layer 1: Semantic Matching • Layer 2: Privacy Perturbation
     </div>
 ''', unsafe_allow_html=True)

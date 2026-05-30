@@ -1,15 +1,14 @@
 """
 Layer 1: Semantic Matching Engine
 
-This module implements semantic similarity search using sentence transformers
-to find the most similar query from a mock database.
+This module implements semantic similarity search using an OpenAI-compatible
+embedding API to find recall candidates, then applies a reranker-based
+Gatekeeper to validate semantic relevance.
 """
 
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
-from openai import OpenAI
-import json
+from embedding_api import cosine_similarity_scores, get_embedding_vectors
+from fortress_models import GATEKEEPER_MODEL_NAME
+from rerank_api import rerank_documents
 
 # Mock database with diverse queries
 MOCK_DB = [
@@ -23,69 +22,36 @@ MOCK_DB = [
 # Global Thresholds
 GLOBAL_MIN_THRESHOLD = 0.635  # Lowered to enable conditional Déjà vu rescue
 
-# Semantic Gatekeeper Prompt - Strict 3-Dimension Check
-CONSISTENCY_CHECK_PROMPT = """
-You are a Semantic Relevance Judge.
-Task: Compare the USER QUERY vs. the CANDIDATE DECOY on 3 Dimensions.
-Dimensions: A. Core Focus: The specific domain or topic (e.g., Medical, Coding, Relationship, Legal). B. Emotional Intent: The user's mood (e.g., Anxious, Curious, Angry, Venting). C. Core Need: What they want (e.g., Specific Solution, Empathy, Validation).
+GATEKEEPER_MISMATCH_THRESHOLD = 0.30
+GATEKEEPER_PERFECT_THRESHOLD = 0.60
 
-JUDGMENT RULES (Strict Priority):
 
-MISMATCH: If Dimension A (Core Focus) is DIFFERENT.
-
-Example: "How to fix Python bug" (Coding) vs "How to cure flu" (Medical).
-
-RESULT: Reject immediately.
-
-PARTIAL: If Dimension A is the SAME, but B or C are DIFFERENT.
-
-Example: "I hate my boss" (Venting) vs "How to negotiate salary" (Solution). Focus is same (Career), but intent differs.
-
-RESULT: Mark as valid but loose match.
-
-PERFECT: If A, B, and C are ALL the SAME.
-
-RESULT: Mark as high-quality match.
-
-OUTPUT JSON ONLY: { "judgment": "PERFECT" | "PARTIAL" | "MISMATCH", "reason": "Brief explanation of the dimensions" }
-"""
+def classify_gatekeeper_score(score: float) -> str:
+    """
+    Convert reranker relevance scores into Fortress gatekeeper judgments.
+    """
+    if score < GATEKEEPER_MISMATCH_THRESHOLD:
+        return "MISMATCH"
+    if score < GATEKEEPER_PERFECT_THRESHOLD:
+        return "PARTIAL"
+    return "PERFECT"
 
 
 class SemanticMatcher:
     """
-    Semantic matching engine that uses sentence transformers to find
+    Semantic matching engine that uses a remote embedding API to find
     the most similar query from a predefined database.
     """
     
-    def __init__(self, model_name='BAAI/bge-small-en-v1.5', threshold=GLOBAL_MIN_THRESHOLD):
+    def __init__(self, threshold=GLOBAL_MIN_THRESHOLD):
         """
-        Initialize the semantic matcher with a sentence transformer model.
+        Initialize the semantic matcher with a remote embedding backend.
         
         Args:
-            model_name (str): Name of the sentence transformer model to use
             threshold (float): Minimum similarity score for a valid match
         """
-        try:
-            print(f"Loading semantic model: {model_name}...")
-            self.model = SentenceTransformer(model_name)
-            self.threshold = threshold
-            self.db_embeddings = None
-            self._encode_database()
-            print("Semantic model loaded successfully!")
-        except Exception as e:
-            raise RuntimeError(f"Failed to initialize SemanticMatcher: {e}")
-    
-    def _encode_database(self):
-        """
-        Encode all queries in the mock database on startup.
-        This precomputes embeddings for efficient similarity search.
-        """
-        try:
-            print("Encoding mock database...")
-            self.db_embeddings = self.model.encode(MOCK_DB, convert_to_numpy=True)
-            print(f"Encoded {len(MOCK_DB)} queries successfully!")
-        except Exception as e:
-            raise RuntimeError(f"Failed to encode database: {e}")
+        self.threshold = threshold
+        print("Semantic matcher ready (remote embedding API mode).")
     
     def find_best_match(self, user_query):
         """
@@ -99,19 +65,24 @@ class SemanticMatcher:
                    (None, None) otherwise
         """
         try:
-            # Encode the user query
-            query_embedding = self.model.encode([user_query], convert_to_numpy=True)
-            
-            # Calculate cosine similarity with all database entries
-            similarities = cosine_similarity(query_embedding, self.db_embeddings)[0]
+            embeddings = get_embedding_vectors([user_query, *MOCK_DB])
+            if len(embeddings) < 2:
+                return None, None
+
+            query_embedding = embeddings[0]
+            db_embeddings = embeddings[1:]
+
+            similarities = cosine_similarity_scores(query_embedding, db_embeddings)
+            if not similarities:
+                return None, None
             
             # Find the best match
-            best_idx = np.argmax(similarities)
-            best_score = similarities[best_idx]
+            best_idx, best_score = max(enumerate(similarities), key=lambda item: item[1])
+            best_score = float(best_score)
             
             # Return result only if above threshold
             if best_score >= self.threshold:
-                return MOCK_DB[best_idx], float(best_score)
+                return MOCK_DB[best_idx], best_score
             else:
                 return None, None
                 
@@ -119,31 +90,27 @@ class SemanticMatcher:
             print(f"Error during matching: {e}")
             return None, None
 
-    def apply_consistency_filter(self, user_query, candidate_items, api_key):
+    def apply_consistency_filter(self, user_query, candidate_items, api_key=None, gatekeeper_enabled=True):
         """
-        Semantic Gatekeeper - Strict 3-Dimension Validation.
-
-        Validates candidates against 3 dimensions:
-        A. Core Focus: The specific domain/topic (Medical, Coding, etc.)
-        B. Emotional Intent: User's mood (Anxious, Curious, Venting, etc.)
-        C. Core Need: What they want (Solution, Empathy, Validation, etc.)
+        Semantic Gatekeeper driven by Qwen3-Reranker-8B.
 
         Processing Logic:
-        Step 0 (Safety Net): If score < 0.635, discard immediately.
-        Step 1 (MISMATCH): If Dimension A differs, discard immediately.
-        Step 2 (PARTIAL): If A same but B/C differ, FORCE into 'Déjà vu' layer.
-        Step 3 (PERFECT): If A, B, C all match, assign layer by cosine score.
+        Step 0 (Safety Net): If cosine score < 0.635, discard immediately.
+        Step 1 (MISMATCH): If reranker score < 0.30, discard immediately.
+        Step 2 (PARTIAL): If reranker score < 0.60, FORCE into 'Déjà vu'.
+        Step 3 (PERFECT): Otherwise, keep and assign layer by cosine score.
 
         Args:
             user_query (str): The original user query.
             candidate_items (list): List of candidate dicts with 'query', 'id', 'score', etc.
-            api_key (str): DeepSeek API key.
+            api_key (str): Optional override for the reranker provider key.
+            gatekeeper_enabled (bool): Whether to run the reranker filter.
 
         Returns:
             list: Filtered list of candidate_items with 'layer' key populated.
         """
-        if not api_key:
-            print("⚠️ No API key provided for Semantic Gatekeeper. Skipping filter.")
+        if not gatekeeper_enabled:
+            print("⚠️ Gatekeeper disabled. Skipping filter.")
             return candidate_items
 
         if not candidate_items:
@@ -172,107 +139,69 @@ class SemanticMatcher:
             return []
 
         try:
-            client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+            rerank_results = rerank_documents(
+                query=user_query,
+                documents=[item["query"] for item in pre_filtered],
+                api_key=api_key,
+                model_name=GATEKEEPER_MODEL_NAME,
+                top_n=len(pre_filtered),
+            )
+            rerank_scores = {
+                int(result["index"]): float(result["relevance_score"])
+                for result in rerank_results
+            }
 
-            # ===================================================================
-            # LLM JUDGMENT: Call DeepSeek for each candidate individually
-            # This ensures accurate 3-dimension analysis per candidate
-            # ===================================================================
             final_candidates = []
             mismatch_count = 0
             partial_count = 0
             perfect_count = 0
 
             for i, item in enumerate(pre_filtered):
-                candidate_query = item['query']
                 score = item.get('score', 0)
+                gatekeeper_score = rerank_scores.get(i, 0.0)
+                judgment = classify_gatekeeper_score(gatekeeper_score)
+                item['gatekeeper_score'] = gatekeeper_score
+                item['judgment_reason'] = (
+                    f"{GATEKEEPER_MODEL_NAME} relevance={gatekeeper_score:.3f}"
+                )
 
-                # Build prompt using the CONSISTENCY_CHECK_PROMPT template
-                prompt = f"""{CONSISTENCY_CHECK_PROMPT}
+                print(f"   [{i}] Cosine: {score:.3f} | Gatekeeper: {gatekeeper_score:.3f} | Judgment: {judgment}")
 
-USER QUERY: "{user_query}"
-
-CANDIDATE DECOY: "{candidate_query}"
-
-Analyze and output JSON only."""
-
-                try:
-                    response = client.chat.completions.create(
-                        model="deepseek-chat",
-                        messages=[{"role": "user", "content": prompt}],
-                        response_format={"type": "json_object"},
-                        temperature=0.1,
-                        max_tokens=200
-                    )
-
-                    result = json.loads(response.choices[0].message.content)
-                    judgment = result.get('judgment', 'MISMATCH').upper()
-                    reason = result.get('reason', 'No reason provided')
-
-                    # Normalize judgment value
-                    if judgment not in ['PERFECT', 'PARTIAL', 'MISMATCH']:
-                        judgment = 'MISMATCH'
-
-                    print(f"   [{i}] Score: {score:.3f} | Judgment: {judgment}")
-                    print(f"       Reason: {reason[:80]}...")
-
-                    # ===================================================================
-                    # STEP 1: MISMATCH - Dimension A (Core Focus) differs
-                    # Discard immediately regardless of score
-                    # ===================================================================
-                    if judgment == 'MISMATCH':
-                        mismatch_count += 1
-                        print(f"   ❌ [{i}] MISMATCH (Core Focus differs) -> Discarded")
-                        continue
-
-                    # ===================================================================
-                    # STEP 2: PARTIAL - Dimension A same, but B or C differs
-                    # FORCE into 'Déjà vu' layer regardless of high score
-                    # ===================================================================
-                    if judgment == 'PARTIAL':
-                        partial_count += 1
-                        item['layer'] = 'Déjà vu'  # Force to lowest tier
-                        item['intent_category'] = 'PARTIAL'
-                        item['judgment_reason'] = reason
-                        final_candidates.append(item)
-                        print(f"   ⚠️ [{i}] PARTIAL -> Forced to Déjà vu (Score: {score:.3f})")
-                        continue
-
-                    # ===================================================================
-                    # STEP 3: PERFECT - All 3 dimensions match
-                    # Assign layer based on cosine similarity score
-                    # ===================================================================
-                    if judgment == 'PERFECT':
-                        perfect_count += 1
-                        item['intent_category'] = 'PERFECT'
-                        item['judgment_reason'] = reason
-
-                        # Layer assignment by score (standard PRD Pyramid)
-                        if score > 0.85:
-                            item['layer'] = 'Precision'
-                            print(f"   ✅ [{i}] PERFECT + Score {score:.3f} -> Precision")
-                        elif score > 0.75:
-                            item['layer'] = 'Resonance'
-                            print(f"   ✅ [{i}] PERFECT + Score {score:.3f} -> Resonance")
-                        else:
-                            item['layer'] = 'Déjà vu'
-                            print(f"   ✅ [{i}] PERFECT + Score {score:.3f} -> Déjà vu")
-
-                        final_candidates.append(item)
-
-                except json.JSONDecodeError as je:
-                    print(f"   ⚠️ [{i}] JSON parse error: {je} -> Treating as MISMATCH")
+                if judgment == 'MISMATCH':
                     mismatch_count += 1
-                except Exception as inner_e:
-                    print(f"   ⚠️ [{i}] LLM call error: {inner_e} -> Treating as MISMATCH")
-                    mismatch_count += 1
+                    item['intent_category'] = 'MISMATCH'
+                    print(f"   ❌ [{i}] MISMATCH -> Discarded")
+                    continue
+
+                if judgment == 'PARTIAL':
+                    partial_count += 1
+                    item['layer'] = 'Déjà vu'
+                    item['intent_category'] = 'PARTIAL'
+                    final_candidates.append(item)
+                    print(f"   ⚠️ [{i}] PARTIAL -> Forced to Déjà vu (Cosine: {score:.3f})")
+                    continue
+
+                perfect_count += 1
+                item['intent_category'] = 'PERFECT'
+
+                if score > 0.85:
+                    item['layer'] = 'Precision'
+                    print(f"   ✅ [{i}] PERFECT + Cosine {score:.3f} -> Precision")
+                elif score > 0.75:
+                    item['layer'] = 'Resonance'
+                    print(f"   ✅ [{i}] PERFECT + Cosine {score:.3f} -> Resonance")
+                else:
+                    item['layer'] = 'Déjà vu'
+                    print(f"   ✅ [{i}] PERFECT + Cosine {score:.3f} -> Déjà vu")
+
+                final_candidates.append(item)
 
             print(f"\n📊 Semantic Gatekeeper Summary:")
             print(f"   Input: {len(candidate_items)} candidates")
             print(f"   Safety Net (score < 0.635): {discarded_low_score} discarded")
-            print(f"   MISMATCH (Core Focus differs): {mismatch_count} discarded")
-            print(f"   PARTIAL (forced to Déjà vu): {partial_count} kept")
-            print(f"   PERFECT (layer by score): {perfect_count} kept")
+            print(f"   MISMATCH (reranker < {GATEKEEPER_MISMATCH_THRESHOLD:.2f}): {mismatch_count} discarded")
+            print(f"   PARTIAL (reranker < {GATEKEEPER_PERFECT_THRESHOLD:.2f}): {partial_count} kept")
+            print(f"   PERFECT (reranker >= {GATEKEEPER_PERFECT_THRESHOLD:.2f}): {perfect_count} kept")
             print(f"   Output: {len(final_candidates)} candidates")
 
             return final_candidates
@@ -283,7 +212,7 @@ Analyze and output JSON only."""
             print(f"   Traceback: {traceback.format_exc()}")
             return candidate_items  # Fail open to avoid breaking app
 
-    def get_stratified_matches(self, user_query, candidate_queries, candidate_ids, source_ids=None, exclude_source_id=None, match_batch_id=None, api_key=None):
+    def get_stratified_matches(self, user_query, candidate_queries, candidate_ids, source_ids=None, exclude_source_id=None, match_batch_id=None, api_key=None, gatekeeper_enabled=False):
         """
         "Context First" Two-Step Retrieval Logic.
 
@@ -310,7 +239,8 @@ Analyze and output JSON only."""
             source_ids (list): Optional list of source_ids for batch matching
             exclude_source_id (str): Optional source_id to exclude (prevents self-referencing)
             match_batch_id (str): Batch_id for VIP check (internal data matching)
-            api_key (str): Optional API key for DeepSeek Consistency Layer
+            api_key (str): Optional override key for the reranker provider
+            gatekeeper_enabled (bool): Whether to apply the reranker Gatekeeper
 
         Returns:
             list: List of dicts {'index': i, 'id': id, 'score': s, 'layer': str, 'is_internal': bool}
@@ -332,12 +262,14 @@ Analyze and output JSON only."""
                 candidate_ids = [candidate_ids[i] for i in filtered_indices]
                 source_ids = [source_ids[i] for i in filtered_indices]
 
-            # Encode inputs
-            query_embedding = self.model.encode([user_query], convert_to_numpy=True)
-            candidate_embeddings = self.model.encode(candidate_queries, convert_to_numpy=True)
+            embeddings = get_embedding_vectors([user_query, *candidate_queries])
+            if len(embeddings) < 2:
+                return []
 
-            # Calculate similarities
-            similarities = cosine_similarity(query_embedding, candidate_embeddings)[0]
+            query_embedding = embeddings[0]
+            candidate_embeddings = embeddings[1:]
+
+            similarities = cosine_similarity_scores(query_embedding, candidate_embeddings)
 
             # SOURCE-LEVEL DEDUPLICATION (One Decoy Per Original Query)
             # Group candidates by source_id and keep only the best match per source
@@ -366,14 +298,19 @@ Analyze and output JSON only."""
                     for idx in range(len(candidate_queries))
                 ]
 
-            # --- APPLY DEEPSEEK DUAL-VALIDATION LAYER ---
-            # When API key is provided, this filter:
-            # 1. Discards MISMATCH candidates (qualitative check)
-            # 2. Assigns 'layer' based on score thresholds (quantitative check)
-            # 3. Discards candidates with score <= 0.635
+            # --- APPLY RERANK GATEKEEPER ---
+            # When enabled, this filter:
+            # 1. Discards low cosine candidates immediately
+            # 2. Uses Qwen3-Reranker-8B to reject or downgrade weak matches
+            # 3. Leaves user-facing layer assignment on cosine thresholds
             consistency_applied = False
-            if api_key:
-                deduplicated_items = self.apply_consistency_filter(user_query, deduplicated_items, api_key)
+            if gatekeeper_enabled:
+                deduplicated_items = self.apply_consistency_filter(
+                    user_query,
+                    deduplicated_items,
+                    api_key=api_key,
+                    gatekeeper_enabled=True,
+                )
                 consistency_applied = True
 
             # ===================================================================

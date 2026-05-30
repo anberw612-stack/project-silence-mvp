@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm audit --audit-level=high
+          npm run build
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Run release preflight checks
+        run: python scripts/preflight_check.py
+
+      - name: Compile core modules
+        run: |
+          python -m py_compile \
+            app.py \
+            fortress_models.py \
+            layer0_router.py \
+            layer1_matching.py \
+            layer2_confuser.py \
+            layer3_consistency.py \
+            layer4_decoy_factory.py \
+            decoy_worker.py \
+            embedding_api.py \
+            rerank_api.py \
+            scripts/preflight_check.py

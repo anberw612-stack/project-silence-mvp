@@ -1,21 +1,17 @@
 from layer1_matching import SemanticMatcher, MOCK_DB
-from sklearn.metrics.pairwise import cosine_similarity
+from embedding_api import cosine_similarity_score, cosine_similarity_scores, get_embedding_vectors
 
-# Initialize matcher with BAAI/bge-small-zh-v1.5
-# (Default params updated in layer1_matching.py)
 matcher = SemanticMatcher(threshold=0.0)
 
-print("\n=== Debugging BAAI/bge Scores ===")
+print("\n=== Debugging Remote Embedding Scores ===")
 
 # Special Test for User's "Surprise" Scenario
 # "Movie" vs "Novel" (Déjà vu concept)
 query_concept = "Movie about a man who realizes he is a character in a novel"
 target_concept = "A novel where the protagonist discovers he is in a movie" 
 
-# Manual embeddings for the concept test
-emb1 = matcher.model.encode([query_concept], convert_to_numpy=True)
-emb2 = matcher.model.encode([target_concept], convert_to_numpy=True)
-concept_score = cosine_similarity(emb1, emb2)[0][0]
+concept_embeddings = get_embedding_vectors([query_concept, target_concept])
+concept_score = cosine_similarity_score(concept_embeddings[0], concept_embeddings[1])
 
 print(f"\nConcept Test: 'Movie' vs 'Novel' (Déjà vu)")
 print(f"  Score: {concept_score:.4f}")
@@ -35,10 +31,10 @@ for query, desc in test_queries:
     print(f"\nQuery: {query}")
     print(f"Goal: {desc}")
     
-    db_embeddings = matcher.db_embeddings
-    query_embedding = matcher.model.encode([query], convert_to_numpy=True)
-    
-    similarities = cosine_similarity(query_embedding, db_embeddings)[0]
+    embeddings = get_embedding_vectors([query, *MOCK_DB])
+    query_embedding = embeddings[0]
+    db_embeddings = embeddings[1:]
+    similarities = cosine_similarity_scores(query_embedding, db_embeddings)
     
     # Print top 3 matches
     indices = similarities.argsort()[::-1][:3]

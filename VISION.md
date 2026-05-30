@@ -1,6 +1,8 @@
 # Project Silence: Vision & Roadmap
 > **A Privacy-First Semantic Bridge for Human-AI-Human Connection**
 
+> Legacy design note: This historical planning document predates the current Fortress architecture and does not describe the current Fortress production, safety, compliance, or medical posture. Use `README.md` and `docs/` as the canonical public documentation.
+
 ## 1. Executive Summary
 Project Silence (Confuser System) is not merely a privacy-preserving tool for medical data; it is a prototype for a **Next-Generation Anonymous Social Network** based on **Semantic Zero-Knowledge Proofs**.
 

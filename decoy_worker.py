@@ -24,14 +24,18 @@ Usage:
 """
 
 import threading
-import time
 import uuid
-import json
 import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
+
+from layer3_consistency import check_and_fix_response
+from layer4_decoy_factory import (
+    extract_topics_from_rationale,
+    generate_decoy_candidates_with_cascade,
+)
 
 
 class WorkerStatus(Enum):
@@ -69,17 +73,17 @@ class DecoyWorker:
         api_key: str,
         supabase_url: str,
         supabase_key: str,
-        num_decoys: int = 3,
+        num_decoys: int = 5,
         on_progress: Optional[Callable[[int, int], None]] = None
     ):
         """
         Initialize the decoy worker.
 
         Args:
-            api_key: DeepSeek API key
+            api_key: Primary chat model API key
             supabase_url: Supabase project URL
             supabase_key: Supabase API key
-            num_decoys: Target number of decoys to generate (default: 3)
+            num_decoys: Target number of decoys to generate (default: 5)
             on_progress: Optional callback for progress updates (current, total)
         """
         self.api_key = api_key
@@ -120,7 +124,7 @@ class DecoyWorker:
         Args:
             original_query: The original user query
             original_response: The AI response to the query
-            owner_user_id: The user ID of the query owner (for email relay)
+            owner_user_id: The user ID of the query owner
             source_id: Optional source ID for grouping decoys
 
         Returns:
@@ -235,121 +239,20 @@ class DecoyWorker:
             print(f"   Source ID: {task.source_id[:8]}...")
             print(f"   Owner User ID: {task.owner_user_id[:8] if task.owner_user_id else 'None'}...")
 
-            # Import here to avoid circular imports and ensure fresh imports in thread
-            from openai import OpenAI
-            from sentence_transformers import SentenceTransformer
-            from sklearn.metrics.pairwise import cosine_similarity
-
-            # Initialize API client
-            client = OpenAI(api_key=self.api_key, base_url="https://api.deepseek.com")
-
-            # Load embedding model for QC
-            print(f"   Loading QC model...")
-            qc_model = SentenceTransformer('BAAI/bge-small-en-v1.5')
-            original_embedding = qc_model.encode([task.original_query], convert_to_numpy=True)
-
             # Get Supabase client
             supabase = self._get_supabase_client()
 
-            # Configuration
-            TARGET_DECOYS = self.num_decoys
-            MAX_BATCHES = 4
-            BATCH_SIZE = 5
+            target_decoys = max(1, min(self.num_decoys, 5))
+            print(f"   Running cascading fallback generation (target: {target_decoys})...")
 
-            valid_decoys = []
-            batch_count = 0
+            valid_decoys, failed_attempts = generate_decoy_candidates_with_cascade(
+                original_query=task.original_query,
+                original_response=task.original_response,
+                max_decoys=target_decoys,
+            )
 
-            # System prompt for decoy generation
-            DECOY_SYSTEM_PROMPT = self._get_decoy_system_prompt()
-
-            # Mission context
-            mission_context = self._get_mission_context()
-            user_content = f"{mission_context}\n\nOriginal Query: {task.original_query}\nOriginal Response: {task.original_response}"
-
-            while len(valid_decoys) < TARGET_DECOYS and batch_count < MAX_BATCHES:
-                # Check for stop signal
-                if self._stop_event.is_set():
-                    print(f"🛑 [WORKER] Stop signal received, exiting...")
-                    with self._lock:
-                        task.status = WorkerStatus.STOPPED
-                    return
-
-                batch_count += 1
-                print(f"\n📦 [WORKER] Batch {batch_count}/{MAX_BATCHES}...")
-
-                batch_candidates = []
-
-                for attempt in range(BATCH_SIZE):
-                    # Check for stop signal
-                    if self._stop_event.is_set():
-                        print(f"🛑 [WORKER] Stop signal received during batch")
-                        with self._lock:
-                            task.status = WorkerStatus.STOPPED
-                        return
-
-                    try:
-                        response = client.chat.completions.create(
-                            model="deepseek-chat",
-                            messages=[
-                                {"role": "system", "content": DECOY_SYSTEM_PROMPT},
-                                {"role": "user", "content": user_content}
-                            ],
-                            temperature=1.0,
-                            response_format={"type": "json_object"},
-                            max_tokens=2000
-                        )
-
-                        content = response.choices[0].message.content
-                        if not content:
-                            continue
-
-                        result = json.loads(content)
-                        if not isinstance(result, dict):
-                            continue
-
-                        decoy_query = result.get('query', '').strip()
-                        decoy_response = result.get('response', '').strip()
-                        rationale = result.get('rationale', '')
-
-                        if not decoy_query or not decoy_response:
-                            continue
-
-                        if decoy_query == task.original_query.strip():
-                            continue
-
-                        # Calculate similarity
-                        decoy_embedding = qc_model.encode([decoy_query], convert_to_numpy=True)
-                        similarity = float(cosine_similarity(original_embedding, decoy_embedding)[0][0])
-
-                        decoy = {
-                            'query': decoy_query,
-                            'response': decoy_response,
-                            'rationale': rationale,
-                            'similarity': similarity
-                        }
-
-                        batch_candidates.append({'decoy': decoy, 'sim': similarity})
-
-                        # Fast Track (Goldilocks Zone)
-                        if 0.75 <= similarity <= 0.85:
-                            print(f"   ⚡️ Fast Track Hit! (sim: {similarity:.3f})")
-                            valid_decoys.append(decoy)
-                            break
-
-                    except json.JSONDecodeError:
-                        continue
-                    except Exception as e:
-                        print(f"   ⚠️ Attempt error: {e}")
-                        continue
-
-                # Judge fallback if no fast track hit
-                if batch_candidates and len(valid_decoys) < TARGET_DECOYS:
-                    if not any(0.75 <= c['sim'] <= 0.85 for c in batch_candidates):
-                        # Pick closest to 0.80
-                        best = min(batch_candidates, key=lambda x: abs(x['sim'] - 0.80))
-                        if best['sim'] >= 0.60:  # Minimum threshold
-                            print(f"   📋 Accepting best candidate (sim: {best['sim']:.3f})")
-                            valid_decoys.append(best['decoy'])
+            print(f"   [WORKER] Candidate decoys ready: {len(valid_decoys)}")
+            print(f"   [WORKER] Failed attempts captured: {len(failed_attempts)}")
 
             # Save valid decoys to Supabase
             print(f"\n💾 [WORKER] Saving {len(valid_decoys)} decoys to Supabase...")
@@ -364,11 +267,12 @@ class DecoyWorker:
 
                 try:
                     decoy_id = str(uuid.uuid4())
+                    fixed_response = check_and_fix_response(decoy['response'], self.api_key) if self.api_key else decoy['response']
                     decoy_data = {
                         'id': decoy_id,
                         'query': decoy['query'],
-                        'response': decoy['response'],
-                        'topics': [],
+                        'response': fixed_response,
+                        'topics': extract_topics_from_rationale(decoy.get('rationale', '')),
                         'source_id': task.source_id,
                         'owner_user_id': task.owner_user_id,
                         'created_at': datetime.now().isoformat()
@@ -384,7 +288,7 @@ class DecoyWorker:
                         # Call progress callback if provided
                         if self.on_progress:
                             try:
-                                self.on_progress(task.decoys_generated, TARGET_DECOYS)
+                                self.on_progress(task.decoys_generated, target_decoys)
                             except:
                                 pass  # Ignore callback errors
 
@@ -470,7 +374,7 @@ def get_or_create_worker(
 
     Args:
         session_id: Unique session identifier
-        api_key: DeepSeek API key
+        api_key: Primary chat model API key
         supabase_url: Supabase project URL
         supabase_key: Supabase API key
 

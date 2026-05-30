@@ -187,7 +187,7 @@ const Hero = () => {
             <Shield className="w-4 h-4 text-accent-teal" />
           </motion.div>
           <span className="text-sm font-medium text-neutral-300 tracking-wide">
-            Enterprise-Grade Security
+            Privacy Research Prototype
           </span>
           <div className="w-2 h-2 rounded-full bg-accent-teal animate-pulse" />
         </motion.div>
@@ -197,9 +197,9 @@ const Hero = () => {
           variants={itemVariants}
           className="font-serif font-semibold text-white mb-8 leading-[1.1]"
         >
-          <span className="block">Protect Your</span>
+          <span className="block">Protect Sensitive</span>
           <span className="block text-gradient">
-            Digital Legacy
+            Conversations
           </span>
         </motion.h1>
 
@@ -208,8 +208,9 @@ const Hero = () => {
           variants={itemVariants}
           className="max-w-2xl mx-auto text-lg md:text-xl text-neutral-400 mb-14 leading-relaxed font-light"
         >
-          Advanced AI-powered privacy protection that shields your conversations
-          from unauthorized access. Your data, encrypted and invisible.
+          Fortress explores decoy generation, semantic recall, and Gatekeeper
+          reranking so people can learn from similar experiences without turning
+          private health stories into public identity trails.
         </motion.p>
 
         {/* CTA Buttons */}
@@ -225,12 +226,12 @@ const Hero = () => {
             transition={{ duration: 0.2 }}
           >
             <Lock className="w-4 h-4 mr-3 group-hover:rotate-12 transition-transform duration-300" />
-            Start Protection
+            Explore Pipeline
           </motion.button>
 
           {/* Ghost Button */}
           <GhostButton icon={Sparkles}>
-            View Demo
+            Review Roadmap
           </GhostButton>
         </motion.div>
 
@@ -241,9 +242,9 @@ const Hero = () => {
         >
           <div className="flex flex-wrap justify-center gap-12 md:gap-20">
             {[
-              { value: '256-bit', label: 'Encryption' },
-              { value: '99.9%', label: 'Uptime' },
-              { value: '0', label: 'Data Breaches' },
+              { value: 'Layered', label: 'Privacy Flow' },
+              { value: 'Remote', label: 'Semantic Recall' },
+              { value: 'Synthetic', label: 'Evaluation First' },
             ].map((stat, index) => (
               <motion.div
                 key={stat.label}

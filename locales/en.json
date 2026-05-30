@@ -41,7 +41,7 @@
   },
   "sidebar": {
     "api_key": "API Key",
-    "api_key_placeholder": "Enter your DeepSeek API key",
+    "api_key_placeholder": "Enter your MiniMax API key",
     "debug_mode": "Debug Mode",
     "user_info": "User Info",
     "logged_in_as": "Logged in as"

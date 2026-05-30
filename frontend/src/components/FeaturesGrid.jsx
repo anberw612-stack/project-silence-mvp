@@ -12,10 +12,8 @@ import {
   Shield,
   Lock,
   Eye,
-  Fingerprint,
   Cpu,
   Globe,
-  Zap,
   Key,
 } from 'lucide-react';
 import ShieldCard from './ShieldCard';
@@ -27,38 +25,38 @@ import ShieldCard from './ShieldCard';
 const features = [
   {
     icon: Shield,
-    title: 'AI-Powered Protection',
-    description: 'Advanced machine learning algorithms analyze and protect your conversations in real-time, detecting potential threats before they materialize.',
+    title: 'Privacy Routing',
+    description: 'Layer 0 classifies whether a message may need privacy protection before the deeper retrieval and decoy pipeline runs.',
     status: 'active',
   },
   {
     icon: Lock,
-    title: 'End-to-End Encryption',
-    description: 'Military-grade 256-bit encryption ensures your data remains unreadable to anyone except intended recipients.',
+    title: 'Data Boundary Awareness',
+    description: 'Configuration stays in environment variables or Streamlit secrets, while docs call out provider, logging, and retention boundaries.',
     status: null,
   },
   {
     icon: Eye,
-    title: 'Privacy Obfuscation',
-    description: 'Intelligent decoy generation creates false trails, making your real data invisible within a sea of plausible alternatives.',
-    status: 'premium',
+    title: 'Narrative Masking',
+    description: 'Decoy generation preserves the abstract dilemma while shifting identifying surface details for safer peer-insight experiments.',
+    status: 'active',
   },
   {
-    icon: Fingerprint,
-    title: 'Biometric Access',
-    description: 'Multi-factor authentication with biometric verification ensures only you can access your protected vault.',
+    icon: Key,
+    title: 'Gatekeeper Reranking',
+    description: 'A reranker validates whether candidate decoys match the same core situation after vector recall finds possible neighbors.',
     status: null,
   },
   {
     icon: Cpu,
-    title: 'Neural Processing',
-    description: 'On-device AI processing means your sensitive data never leaves your secure environment.',
+    title: 'Remote Embedding Mode',
+    description: 'The app uses API-based embeddings to avoid shipping heavyweight local model weights or slow cold-start downloads.',
     status: 'active',
   },
   {
     icon: Globe,
-    title: 'Global Compliance',
-    description: 'Full compliance with GDPR, CCPA, and international privacy regulations across all jurisdictions.',
+    title: 'Open Review Surface',
+    description: 'Threat modeling, data-handling notes, tests, preflight checks, CodeQL, and Dependabot make the prototype easier to audit.',
     status: null,
   },
 ];
@@ -136,7 +134,7 @@ const FeaturesGrid = () => {
           >
             <div className="h-px w-12 bg-gradient-to-r from-transparent to-accent-teal/50" />
             <span className="text-sm font-medium text-accent-teal tracking-[0.2em] uppercase">
-              Security Features
+              Research Safety Layers
             </span>
             <div className="h-px w-12 bg-gradient-to-l from-transparent to-accent-teal/50" />
           </motion.div>
@@ -149,8 +147,8 @@ const FeaturesGrid = () => {
             viewport={{ once: true }}
             transition={{ duration: 0.8, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
           >
-            Uncompromising
-            <span className="text-gradient"> Protection</span>
+            Privacy-First
+            <span className="text-gradient"> Research Stack</span>
           </motion.h2>
 
           {/* Subheading */}
@@ -161,8 +159,9 @@ const FeaturesGrid = () => {
             viewport={{ once: true }}
             transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
           >
-            Every layer of our platform is engineered to keep your data secure,
-            private, and under your complete control.
+            Fortress is being hardened in public with explicit privacy
+            boundaries, synthetic-first evaluation, and conservative medical
+            safety language.
           </motion.p>
         </motion.div>
 
@@ -189,16 +188,18 @@ const FeaturesGrid = () => {
           transition={{ duration: 0.8, delay: 0.6, ease: [0.16, 1, 0.3, 1] }}
         >
           <p className="text-neutral-500 mb-6">
-            Need enterprise-grade security for your organization?
+            Want to review the architecture and safety roadmap?
           </p>
           <motion.a
-            href="#contact"
+            href="https://github.com/anberw612-stack/project-silence-mvp/tree/main/docs"
+            target="_blank"
+            rel="noreferrer"
             className="inline-flex items-center gap-3 text-accent-teal hover:text-accent-teal-light transition-colors duration-300 group"
             whileHover={{ x: 5 }}
             transition={{ duration: 0.3 }}
           >
             <span className="text-sm font-medium tracking-wide uppercase">
-              Contact Sales
+              Read the OSS docs
             </span>
             <Key className="w-4 h-4 group-hover:rotate-12 transition-transform duration-300" />
           </motion.a>

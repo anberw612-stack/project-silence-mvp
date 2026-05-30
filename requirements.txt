@@ -1,7 +1,3 @@
-sentence-transformers
-numpy
-scikit-learn
-tqdm
 openai
 streamlit
 supabase

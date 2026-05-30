@@ -41,7 +41,7 @@
   },
   "sidebar": {
     "api_key": "API 密钥",
-    "api_key_placeholder": "请输入您的 DeepSeek API 密钥",
+    "api_key_placeholder": "请输入您的 MiniMax API 密钥",
     "debug_mode": "调试模式",
     "user_info": "用户信息",
     "logged_in_as": "当前登录"
